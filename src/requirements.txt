@@ -1,0 +1,19 @@
+- A user registers to the server with an alias (DONE) (UDP)
+- A user can create a new group for chatting (HALF-DONE) (UDP)(MULTICAST)
+- A creator of a group can delete it (DONE) (UDP)
+- A group creator has the option to delegate group ownership to another group member (DONE) (UDP)
+- A user can join a group according to the access policy defined by the group creator:
+	o Freely join
+	o Join by entering the password set by the group creator
+	o Join by asking permission from the group creator
+- A group creator can kick a user out the group
+- A user can view all users in the system (DONE) (UDP)
+- A user can view all groups in the system (DONE) (UDP)
+- A user can view all users in a group (DONE) (UDP)
+- A user can create multiple groups (DONE) (UDP)
+- A user can participate in multiple groups
+- A user can chat privately with another user
+- A user can participate in multiple private chats
+- In a private chat, a user can see live in real-time the keystrokes of the other user
+- If a group member is not writing anything for more time than a threshold (set by the group creator), he is automatically kick out of the group
+- If no group member is writing anything for more time than a threshold (set by the server administrator), the group is automatically deleted

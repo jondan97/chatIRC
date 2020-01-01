@@ -1,4 +1,4 @@
-package com.company.examples;/*
+package com.company.random.examples;/*
  * Searches for occupied UDP ports in the local machine
  *
  */

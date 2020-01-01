@@ -1,4 +1,4 @@
-package com.company.examples;/*
+package com.company.random.examples;/*
  * Filename: TCPEchoClient.java
  * Description: An echo client using connection-oriented delivery system (TCP).
  *              Sends character messages to a server which are echoed capitalized.

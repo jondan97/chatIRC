@@ -1,4 +1,4 @@
-package com.company.examples;/*
+package com.company.random.examples;/*
  * Filename: localDetails.java
  * Description: Finds the name and the IP Address of a local machine.
  * Operation: java localDetails

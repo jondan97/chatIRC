@@ -6,12 +6,24 @@ import java.util.Objects;
 
 public class Chatroom implements Serializable {
     User owner;
+    //saved as a number but in case we want to swap it in the future with a title such as "Free", we leave it
+    //as it is
     String policy;
     String name;
     String password;
+    //list of users that belong in this chatroom
     ArrayList<User> users;
+    //set by the owner
     int kickTime;
+    //set by the server admin (who is going to be distinguished by a unique name)
     int deletionTime;
+
+    //default constructor, only need to declare the array list
+    public Chatroom() {
+        users = new ArrayList<>();
+    }
+
+    //the authors expect that the reader is already familiar with getters/setters
 
     public User getOwner() {
         return owner;
@@ -69,6 +81,11 @@ public class Chatroom implements Serializable {
         this.deletionTime = deletionTime;
     }
 
+
+    //this method is also shown to the user
+    //(the authors are aware that toString is mainly for debugging)
+    //the policy which is saved in numbers (1-3) is converted to
+    //user-friendly text
     @Override
     public String toString() {
         String policyReadable = null;
@@ -81,10 +98,12 @@ public class Chatroom implements Serializable {
         }
         return "Chatroom(" +
                 "" + name + "): " +
-                "Owner=" + owner.getAlias() +
+                "Owner=" + owner.getUsername() +
                 ", policy='" + policyReadable + '\'';
     }
 
+    //owner and name is enough for a chatroom to be unique
+    //name is lower case in case user inputs the same name differently
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

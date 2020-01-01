@@ -1,4 +1,4 @@
-package com.company.examples;/*
+package com.company.random.examples;/*
  * Filename: remoteHost.java
  * Description: Finds the IP Address of a specified host.
  * Operation: java remoteHost [hostname]

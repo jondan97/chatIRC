@@ -1,4 +1,4 @@
-package com.company.examples;/*
+package com.company.random.examples;/*
  * Filename: UDPEchoServer.java
  * Description: An echo server using connectionless delivery system (UDP).
  *              Receives character messages at a specified (hardcoded) port.

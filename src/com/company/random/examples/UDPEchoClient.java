@@ -1,4 +1,4 @@
-package com.company.examples;/*
+package com.company.random.examples;/*
  * Filename: UDPEchoClient.java
  * Description: An echo client using connectionless delivery system (UDP).
  *              Sends character messages to a server which are echoed capitalized.
