@@ -2,9 +2,12 @@ package com.company;
 
 import com.company.entity.Chatroom;
 import com.company.entity.User;
-import com.company.service.SocketService;
+import com.company.service.TCPSocketService;
+import com.company.service.UDPSocketService;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.*;
 import java.util.ArrayList;
 
@@ -20,7 +23,7 @@ public class Client {
         System.out.println(help);
 
         String ipString = "192.168.1.13";
-        int port = 4444;
+        int port = 1;
         //in case the user wants to change IP/Port without editing the Java files
         if (args.length > 0) {
             ipString = args[1];
@@ -41,70 +44,55 @@ public class Client {
             String checkAvailability = "/availability";
             //Question asked in form of a String (usually)
             byte[] question;
-            question = SocketService.convertDistinguishableObjectToByteArray(5, checkAvailability);
+            question = UDPSocketService.convertDistinguishableObjectToByteArray(5, checkAvailability);
             DatagramPacket testPacketToServer = new DatagramPacket(question, question.length, serverAddr, port);
-            DatagramSocket socket = new DatagramSocket();
-            socket.send(testPacketToServer);
-
+            DatagramSocket UDPsocket = new DatagramSocket();
+            UDPsocket.send(testPacketToServer);
             //then we get the answer, if we receive a message that says "true", then ping success
             //if we receive anything else ("false" in that case) warn that the connection might be weak
             //this happens because we might have received a corrupted packet
             byte[] answer = new byte[datagramPacketMaxLength];
             DatagramPacket answerFromServer = new DatagramPacket(answer, datagramPacketMaxLength);
-            socket.setSoTimeout(1000);
-            socket.receive(answerFromServer);
-            socket.setSoTimeout(0);
+            //waiting time for a packet to be received is set here and then reset back to 0
+            UDPsocket.setSoTimeout(1000);
+            UDPsocket.receive(answerFromServer);
+            UDPsocket.setSoTimeout(0);
             String isServerOnline = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
             if (isServerOnline.equals("true")) {
                 System.out.println("Succesfully pinged: " + ipString + " (" + serverAddr.getHostName() + ")");
             } else {
-                System.out.println("Connected to server but connection may be weak.");
+                System.out.println("Pinged server but connection may be weak.");
             }
 
-            //ask the server if the user is already registered
-            String isUserRegistered = "/isUserRegistered";
-            question = SocketService.convertDistinguishableObjectToByteArray(0, isUserRegistered);
-            DatagramPacket isUserRegisteredPacketToServer = new DatagramPacket(question, question.length, serverAddr, port);
-            socket.send(isUserRegisteredPacketToServer);
-            socket.receive(answerFromServer);
-
-            //if the server returns false, then we prompt the user to enter a username and send it over
-            //so he can register
-            //if the server returns true, then the client receives the username and notifies user
-            isUserRegistered = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
-            User thisClient;
             BufferedReader userInput = new BufferedReader(new InputStreamReader(System.in));
-            if (isUserRegistered.equals("false")) {
-                //while loop in order to check if user with the same alias already exists
+
+            String isUserRegistered = "/isUserRegistered";
+            User thisClient = null;
+            Socket tcpSocket = new Socket("192.168.1.13", 1);
+            TCPSocketService.sendObject(isUserRegistered, tcpSocket);
+            boolean userIsRegistered = (boolean) TCPSocketService.receiveObject(tcpSocket);
+            if (userIsRegistered) {
+                username = (String) TCPSocketService.receiveObject(tcpSocket);
+                thisClient = new User(username, thisMachine);
+                System.out.println("You are already registered as '" + thisClient.getUsername() + "'");
+            } else if (!userIsRegistered) {
+                boolean usernameExists = false;
                 while (true) {
                     System.out.println("What is your username going to be?");
                     username = userInput.readLine();
-                    //username the user entered and localhost details:
-                    thisClient = new User(username, thisMachine);
-
-                    //send the user to the server
-                    byte[] serializedUser = SocketService.convertDistinguishableObjectToByteArray(2, username);
-                    DatagramPacket userPacket = new DatagramPacket(serializedUser, serializedUser.length, serverAddr, port);
-                    socket.send(userPacket);
-                    socket.receive(answerFromServer);
-                    isUserRegistered = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
-                    //in case user exists
-                    if (isUserRegistered.equals("alreadyExists")) {
+                    TCPSocketService.sendObject(username, tcpSocket);
+                    usernameExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                    if (usernameExists) {
                         System.out.println("Username you have chosen already exists, please choose another.");
                         continue;
-                        //in case user does not exist
-                    } else if (isUserRegistered.equals("userAdded")) {
+                    } else if (!usernameExists) {
+                        thisClient = new User(username, thisMachine);
                         System.out.println("You have been successfully registered as '" + thisClient.getUsername() + "'.");
                         break;
                     }
                 }
-                //if message received is "true" (in reality anything else other than false)
-            } else {
-                socket.receive(answerFromServer);
-                username = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
-                thisClient = new User(username, thisMachine);
-                System.out.println("You are already registered as '" + thisClient.getUsername() + "'");
             }
+            tcpSocket.close();
 
             //the user can now interact with the server in many ways, mainly with the help of the
             //existing commands
@@ -121,15 +109,11 @@ public class Client {
                     break;
                     //request to see all chatrooms
                 } else if (userInputSentToServer.equals("/showallchatrooms")) {
-                    //see SocketService class for this method
-                    question = SocketService.convertDistinguishableObjectToByteArray(0, userInputSentToServer);
-                    DatagramPacket packetToServer = new DatagramPacket(question, question.length, serverAddr, port);
-                    socket.send(packetToServer);
-                    socket.receive(answerFromServer);
-                    ObjectInputStream iStream = new ObjectInputStream(new ByteArrayInputStream(answerFromServer.getData()));
+                    tcpSocket = new Socket("192.168.1.13", 1);
+                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     try {
-                        ArrayList<Chatroom> chatrooms = (ArrayList) iStream.readObject();
-                        iStream.close();
+                        ArrayList<Chatroom> chatrooms = (ArrayList<Chatroom>) TCPSocketService.receiveObject(tcpSocket);
+                        tcpSocket.close();
                         if (chatrooms.isEmpty()) {
                             System.out.println("No chatrooms exist yet.");
                         } else {
@@ -142,14 +126,11 @@ public class Client {
                     }
                     //request to see all users
                 } else if (userInputSentToServer.equals("/showallusers")) {
-                    question = SocketService.convertDistinguishableObjectToByteArray(0, userInputSentToServer);
-                    DatagramPacket packetToServer = new DatagramPacket(question, question.length, serverAddr, port);
-                    socket.send(packetToServer);
-                    socket.receive(answerFromServer);
-                    ObjectInputStream iStream = new ObjectInputStream(new ByteArrayInputStream(answerFromServer.getData()));
+                    tcpSocket = new Socket("192.168.1.13", 1);
+                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     try {
-                        ArrayList<User> users = (ArrayList) iStream.readObject();
-                        iStream.close();
+                        ArrayList<User> users = (ArrayList) TCPSocketService.receiveObject(tcpSocket);
+                        tcpSocket.close();
                         if (users.isEmpty()) {
                             System.out.println("No users exist yet.");
                         } else {
@@ -163,20 +144,24 @@ public class Client {
                 }
                 //request to see all users of a particular chatroom
                 else if (userInputSentToServer.equals("/showchatroomusers")) {
-                    System.out.println("What is the name of the chatroom you want to see the users of?");
-                    userInputSentToServer = userInput.readLine();
-                    //based on the architecture implemented on the UDP server, we need to have a second
-                    //part in our packet (an object), so we send the String object along even in cases
-                    //where we don't need an object (however, we need the String object here)
-                    //check UDPThread class for more info
-                    question = SocketService.convertDistinguishableObjectToByteArray(1, userInputSentToServer);
-                    DatagramPacket packetToServer = new DatagramPacket(question, question.length, serverAddr, port);
-                    socket.send(packetToServer);
-                    socket.receive(answerFromServer);
-                    ObjectInputStream iStream = new ObjectInputStream(new ByteArrayInputStream(answerFromServer.getData()));
+                    tcpSocket = new Socket("192.168.1.13", 1);
+                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+
+                    while (true) {
+                        System.out.println("What is the name of the chatroom you want to see the users of?");
+                        userInputSentToServer = userInput.readLine();
+                        TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                        boolean chatroomExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                        if (chatroomExists) {
+                            break;
+                        } else if (!chatroomExists) {
+                            System.out.println("Chatroom does not exist.");
+                            continue;
+                        }
+                    }
                     try {
-                        ArrayList<User> chatroomUsers = (ArrayList) iStream.readObject();
-                        iStream.close();
+                        ArrayList<User> chatroomUsers = (ArrayList) TCPSocketService.receiveObject(tcpSocket);
+                        tcpSocket.close();
                         if (chatroomUsers.isEmpty()) {
                             System.out.println("No users exist in this chatroom.");
                         } else {
@@ -191,67 +176,100 @@ public class Client {
                 //this should be changed to TCP or more efficient algorithm needs to be designed
                 //request to delegate chatroom ownership
                 else if (userInputSentToServer.equals("/delegatechatroomownership")) {
-                    Chatroom chatroom = new Chatroom();
-                    System.out.println("What is the name of the chatroom?");
-                    userInputSentToServer = userInput.readLine();
-                    chatroom.setName(userInputSentToServer);
-                    System.out.println("What is the name of the new owner?");
-                    userInputSentToServer = userInput.readLine();
-                    User newOwner = new User(userInputSentToServer);
-                    chatroom.setOwner(newOwner);
-                    byte[] serializedChatroom = SocketService.convertDistinguishableObjectToByteArray(2, chatroom);
-                    DatagramPacket chatroomPacket = new DatagramPacket(serializedChatroom, serializedChatroom.length, serverAddr, port);
-                    socket.send(chatroomPacket);
-                    socket.receive(answerFromServer);
-                    String msgFromServer = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
-                    if (msgFromServer.equals("ownerChanged")) {
-                        System.out.println("The owner successfully changed.");
-                    } else if (msgFromServer.equals("clientNotOwner")) {
-                        System.out.println("You are not the current owner or either chatroom or user do not exist.");
+                    tcpSocket = new Socket("192.168.1.13", 1);
+                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                    while (true) {
+                        System.out.println("What is the name of the chatroom?");
+                        userInputSentToServer = userInput.readLine();
+                        TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                        boolean chatroomExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                        boolean userExists = false;
+                        if (!chatroomExists) {
+                            System.out.println("Chatroom name does not exist or you are not the owner.");
+                            continue;
+                        } else if (chatroomExists) {
+                            while (true) {
+                                System.out.println("What is the name of the new owner?");
+                                userInputSentToServer = userInput.readLine();
+                                TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                                userExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                                if (userExists) {
+                                    System.out.println("Owner has changed.");
+                                    break;
+                                } else if (!userExists) {
+                                    System.out.println("User does not exist in this group.");
+                                    continue;
+                                }
+
+                            }
+                        }
+                        if (chatroomExists && userExists) {
+                            break;
+                        }
                     }
                 }
+//                    Chatroom chatroom = new Chatroom();
+//                    System.out.println("What is the name of the chatroom?");
+//                    userInputSentToServer = userInput.readLine();
+//                    chatroom.setName(userInputSentToServer);
+//                    System.out.println("What is the name of the new owner?");
+//                    userInputSentToServer = userInput.readLine();
+//                    User newOwner = new User(userInputSentToServer);
+//                    chatroom.setOwner(newOwner);
+//                    byte[] serializedChatroom = UDPSocketService.convertDistinguishableObjectToByteArray(2, chatroom);
+//                    DatagramPacket chatroomPacket = new DatagramPacket(serializedChatroom, serializedChatroom.length, serverAddr, port);
+//                    UDPsocket.send(chatroomPacket);
+//                    UDPsocket.receive(answerFromServer);
+//                    String msgFromServer = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
+//                    if (msgFromServer.equals("ownerChanged")) {
+//                        System.out.println("The owner successfully changed.");
+//                    } else if (msgFromServer.equals("clientNotOwner")) {
+//                        System.out.println("You are not the current owner or either chatroom or user do not exist.");
+//                    }
+//                }
                 //this should be changed to TCP or more efficient algorithm needs to be designed
                 //request to create a new chatroom
                 else if (userInputSentToServer.equals("/createchatroom")) {
-                    Chatroom chatroom = new Chatroom();
-                    System.out.println("What is going to be the name of the chatroom?");
-                    userInputSentToServer = userInput.readLine();
-                    chatroom.setName(userInputSentToServer);
-                    System.out.println("What is going to be the policy of the chatroom? (1=Free, 2=Password-Protected, 3=Permission-Required)");
-                    userInputSentToServer = userInput.readLine();
-                    chatroom.setPolicy(userInputSentToServer);
-                    if (userInputSentToServer.equals("2")) {
-                        System.out.println("What will the chatroom's password be?");
+                    tcpSocket = new Socket("192.168.1.13", 1);
+                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                    while (true) {
+                        System.out.println("What is going to be the name of the chatroom?");
                         userInputSentToServer = userInput.readLine();
-                        chatroom.setPassword(userInputSentToServer);
-                    }
-                    chatroom.setOwner(thisClient);
-                    chatroom.getUsers().add(thisClient);
-                    //test user:
-                    chatroom.getUsers().add(new User("ska"));
-                    byte[] serializedChatroom = SocketService.convertDistinguishableObjectToByteArray(0, chatroom);
-                    DatagramPacket chatroomPacket = new DatagramPacket(serializedChatroom, serializedChatroom.length, serverAddr, port);
-                    socket.send(chatroomPacket);
-                    socket.receive(answerFromServer);
-                    String msgFromServer = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
-                    if (msgFromServer.equals("chatroomAdded")) {
-                        System.out.println("Your chatroom has been added on the server.");
-                    } else if (msgFromServer.equals("alreadyExists")) {
-                        System.out.println("The chatroom name you chose already exists.");
+                        TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                        boolean alreadyExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                        if (alreadyExists) {
+                            System.out.println("Chatroom name already exists, please choose another.");
+                            continue;
+                        } else if (!alreadyExists) {
+                            System.out.println("What is going to be the policy of the chatroom? (1=Free, 2=Password-Protected, 3=Permission-Required)");
+                            userInputSentToServer = userInput.readLine();
+                            TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                            if (userInputSentToServer.equals("2")) {
+                                System.out.println("What will the chatroom's password be?");
+                                userInputSentToServer = userInput.readLine();
+                                //this should be encrypted when sent
+                                TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                            }
+                            System.out.println("Your chatroom has been succesfully added on the server.");
+                            break;
+                        }
                     }
                     //request to delete a chatroom
                 } else if (userInputSentToServer.equals("/deletechatroom")) {
-                    System.out.println("What is the name of the chatroom you want to delete?");
-                    userInputSentToServer = userInput.readLine();
-                    question = SocketService.convertDistinguishableObjectToByteArray(3, userInputSentToServer);
-                    DatagramPacket packetToServer = new DatagramPacket(question, question.length, serverAddr, port);
-                    socket.send(packetToServer);
-                    socket.receive(answerFromServer);
-                    String msgFromServer = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
-                    if (msgFromServer.equals("chatroomDeleted")) {
-                        System.out.println("Your chatroom has been deleted from the server.");
-                    } else if (msgFromServer.equals("chatroomNotDeleted")) {
-                        System.out.println("You are not the owner or the chatroom does not exist so you cannot delete it.");
+                    tcpSocket = new Socket("192.168.1.13", 1);
+                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                    while (true) {
+                        System.out.println("What is the name of the chatroom you want to delete?");
+                        userInputSentToServer = userInput.readLine();
+                        TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                        boolean chatroomDeleted = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                        if (chatroomDeleted) {
+                            System.out.println("Chatroom has been successfully deleted.");
+                            break;
+                        } else if (!chatroomDeleted) {
+                            System.out.println("Chatroom name you entered does not exist or you are not the owner.");
+                            continue;
+                        }
                     }
                     //request to see all the commands available in the application
                 } else if (userInputSentToServer.equals("/help")) {
@@ -259,10 +277,10 @@ public class Client {
                     //when the user has entered something the client does not understand
                     //and neither will the server (hopefully)
                 } else {
-                    question = SocketService.convertDistinguishableObjectToByteArray(0, userInputSentToServer);
+                    question = UDPSocketService.convertDistinguishableObjectToByteArray(0, userInputSentToServer);
                     DatagramPacket packetToServer = new DatagramPacket(question, question.length, serverAddr, port);
-                    socket.send(packetToServer);
-                    socket.receive(answerFromServer);
+                    UDPsocket.send(packetToServer);
+                    UDPsocket.receive(answerFromServer);
                     String msgFromServer = new String(answerFromServer.getData(), 0, answerFromServer.getLength());
                     if (msgFromServer.equals("unknownMessage")) {
                         System.out.println("The server did not understand your question.");
@@ -275,6 +293,8 @@ public class Client {
         } catch (SocketTimeoutException e) {
             System.out.println("Looks like the server is not up. Try again later.");
         } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }
         System.out.println("Exiting...");

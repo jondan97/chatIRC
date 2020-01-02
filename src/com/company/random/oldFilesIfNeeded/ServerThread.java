@@ -2,7 +2,7 @@ package com.company.random.oldFilesIfNeeded;
 
 import com.company.entity.Chatroom;
 import com.company.entity.User;
-import com.company.service.SocketService;
+import com.company.service.UDPSocketService;
 
 import java.io.*;
 import java.net.DatagramPacket;
@@ -56,31 +56,31 @@ public class ServerThread extends Thread {
                 String messageReceivedString = (String) messageReceived;
                 //request to see if server is up
                 if (messageReceivedString.equals("/availability")) {
-                    serverSocket.send(SocketService.quickConfirmationPacket("true", receivedPacket.getAddress()
+                    serverSocket.send(UDPSocketService.quickConfirmationPacket("true", receivedPacket.getAddress()
                             , receivedPacket.getPort()));
                     //request to check if a user is already registered
                 } else if (messageReceivedString.equals("/isUserRegistered")) {
                     System.out.println("New user requested to register.");
                     if (currentUser != null) {
-                        serverSocket.send(SocketService.quickConfirmationPacket("true", receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket("true", receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                         System.out.println("User is already registered as '" + currentUser.getUsername() + "'");
-                        serverSocket.send(SocketService.quickConfirmationPacket(currentUser.getUsername(), receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket(currentUser.getUsername(), receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                     } else {
-                        serverSocket.send(SocketService.quickConfirmationPacket("false", receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket("false", receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                     }
                     //request to see all chatrooms
                 } else if (messageReceivedString.equals("/showallchatrooms")) {
-                    byte[] serializedAllChatrooms = SocketService.convertObjectToByteArray(chatrooms);
+                    byte[] serializedAllChatrooms = UDPSocketService.convertObjectToByteArray(chatrooms);
                     DatagramPacket chatroomsPacket = new DatagramPacket(serializedAllChatrooms, serializedAllChatrooms.length,
                             receivedPacket.getAddress(), receivedPacket.getPort());
                     serverSocket.send(chatroomsPacket);
                     System.out.println("'" + currentUser.getUsername() + "' requested to see all chatrooms.");
                     //request to see all users
                 } else if (messageReceivedString.equals("/showallusers")) {
-                    byte[] serializedAllUsers = SocketService.convertObjectToByteArray(users);
+                    byte[] serializedAllUsers = UDPSocketService.convertObjectToByteArray(users);
                     DatagramPacket usersPacket = new DatagramPacket(serializedAllUsers, serializedAllUsers.length,
                             receivedPacket.getAddress(), receivedPacket.getPort());
                     serverSocket.send(usersPacket);
@@ -94,7 +94,7 @@ public class ServerThread extends Thread {
                             requestedChatroom = chatroom;
                         }
                     }
-                    byte[] serializedChatroomUsers = SocketService.convertObjectToByteArray(requestedChatroom.getUsers());
+                    byte[] serializedChatroomUsers = UDPSocketService.convertObjectToByteArray(requestedChatroom.getUsers());
                     DatagramPacket chatroomUsersPacket = new DatagramPacket(serializedChatroomUsers, serializedChatroomUsers.length,
                             receivedPacket.getAddress(), receivedPacket.getPort());
                     serverSocket.send(chatroomUsersPacket);
@@ -106,7 +106,7 @@ public class ServerThread extends Thread {
                     boolean alreadyExists = false;
                     for (User existingUser : users) {
                         if (username.toLowerCase().equals(existingUser.getUsername().toLowerCase())) {
-                            serverSocket.send(SocketService.quickConfirmationPacket("alreadyExists", receivedPacket.getAddress()
+                            serverSocket.send(UDPSocketService.quickConfirmationPacket("alreadyExists", receivedPacket.getAddress()
                                     , receivedPacket.getPort()));
                             alreadyExists = true;
                             break;
@@ -116,7 +116,7 @@ public class ServerThread extends Thread {
                         User newUser = new User(username, receivedPacket.getAddress());
                         users.add(newUser);
                         System.out.println("New user registered as '" + newUser.getUsername() + "' (" + newUser.getDetails().getHostName() + ")");
-                        serverSocket.send(SocketService.quickConfirmationPacket("userAdded", receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket("userAdded", receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                     }
                 }
@@ -130,7 +130,7 @@ public class ServerThread extends Thread {
                     for (Chatroom room : chatrooms) {
                         if (room.equals(toBeDeletedChatroom)) {
                             chatrooms.remove(toBeDeletedChatroom);
-                            serverSocket.send(SocketService.quickConfirmationPacket("chatroomDeleted", receivedPacket.getAddress()
+                            serverSocket.send(UDPSocketService.quickConfirmationPacket("chatroomDeleted", receivedPacket.getAddress()
                                     , receivedPacket.getPort()));
                             chatroomDeleted = true;
                             System.out.println("Chatroom '" + toBeDeletedChatroom.getName() + "' has been deleted.");
@@ -138,7 +138,7 @@ public class ServerThread extends Thread {
                         }
                     }
                     if (!chatroomDeleted) {
-                        serverSocket.send(SocketService.quickConfirmationPacket("chatroomNotDeleted", receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket("chatroomNotDeleted", receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                         System.out.println("Chatroom '" + toBeDeletedChatroom.getName() + "' does not exist or user is not the owner for it to be deleted.");
                     }
@@ -146,7 +146,7 @@ public class ServerThread extends Thread {
                 //server received an unknown message, so lets user know
                 else {
                     System.out.println("Received an unknown message '" + messageReceivedString + "' from user '" + currentUser.getUsername() + "'");
-                    serverSocket.send(SocketService.quickConfirmationPacket("unknownMessage", receivedPacket.getAddress()
+                    serverSocket.send(UDPSocketService.quickConfirmationPacket("unknownMessage", receivedPacket.getAddress()
                             , receivedPacket.getPort()));
 
                 }
@@ -158,7 +158,7 @@ public class ServerThread extends Thread {
                     boolean alreadyExists = false;
                     for (Chatroom room : chatrooms) {
                         if (room.getName().toLowerCase().equals(newChatroom.getName().toLowerCase())) {
-                            serverSocket.send(SocketService.quickConfirmationPacket("alreadyExists", receivedPacket.getAddress()
+                            serverSocket.send(UDPSocketService.quickConfirmationPacket("alreadyExists", receivedPacket.getAddress()
                                     , receivedPacket.getPort()));
                             alreadyExists = true;
                             System.out.println("Chatroom '" + newChatroom.getName() + "' already exists.");
@@ -169,7 +169,7 @@ public class ServerThread extends Thread {
                         newChatroom.setOwner(currentUser);
                         chatrooms.add(newChatroom);
                         System.out.println("Chatroom '" + newChatroom.getName() + "' has been created.");
-                        serverSocket.send(SocketService.quickConfirmationPacket("chatroomAdded", receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket("chatroomAdded", receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                     }
                 }
@@ -200,12 +200,12 @@ public class ServerThread extends Thread {
                         }
                     }
                     if (ownershipDelegated) {
-                        serverSocket.send(SocketService.quickConfirmationPacket("ownerChanged", receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket("ownerChanged", receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                         System.out.println("Ownership of '" + newChatroom.getName() + "' has been successfully delegated from '" + currentUser.getUsername() + "' to '" + newChatroom.getOwner().getUsername() + "'.");
                     }
                     if (!ownershipDelegated) {
-                        serverSocket.send(SocketService.quickConfirmationPacket("clientNotOwner", receivedPacket.getAddress()
+                        serverSocket.send(UDPSocketService.quickConfirmationPacket("clientNotOwner", receivedPacket.getAddress()
                                 , receivedPacket.getPort()));
                         System.out.println("Ownership of chatroom '" + newChatroom.getName() + "' failed to be delegated.");
                     }

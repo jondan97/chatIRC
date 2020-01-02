@@ -5,7 +5,7 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
-public class SocketService {
+public class UDPSocketService {
 
     //mainly used by the server to answer to questions:
     //converts an object to a byte array, allowing a socket to send it to a receiver
@@ -31,8 +31,7 @@ public class SocketService {
         oo.writeInt(number);
         oo.writeObject(o);
         oo.close();
-        byte[] serializedDistinguishableObject = bStream.toByteArray();
-        return serializedDistinguishableObject;
+        return bStream.toByteArray();
     }
 
 

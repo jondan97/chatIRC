@@ -70,8 +70,6 @@ public class Server {
             tcpServer.register(selector, SelectionKey.OP_ACCEPT);
             udpServer.register(selector, SelectionKey.OP_READ);
 
-            System.out.println("Server Started on port: " + port + "!");
-
             //all the users of the chat application
             ArrayList<User> users = new ArrayList<>();
             //test user
@@ -105,8 +103,8 @@ public class Server {
                         // Now test the key and the channel to find out
                         // whether something happend on the TCP or UDP channel
                         if (key.isAcceptable() && c == tcpServer) {
-                            System.out.println("XAXAXAXAXAXA");
-                            new TCPThread(tcpServer.accept().socket()).start();
+                            //SocketChannel s = tcpServer.accept();
+                            new TCPThread(tcpServer.accept(), users, chatrooms).start();
                         } else if (key.isReadable() && c == udpServer) {
                             //if we don't declare the buffer inside the loop, then in the next iteration of the while loop,
                             //the buffer contents will be lost and the active thread will be left with a null instance,
