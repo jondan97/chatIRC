@@ -1,7 +1,10 @@
 package com.company;
 
 import com.company.entity.Chatroom;
+import com.company.entity.Message;
 import com.company.entity.User;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Multimap;
 
 import java.io.IOException;
 import java.net.*;
@@ -29,6 +32,7 @@ public class Server {
             } catch (UnknownHostException e) {
                 e.printStackTrace();
             }
+
             System.out.println("Server's IP Address is: " + thisMachine.getHostAddress() + "\n");
 
             //we dont actually need a datagramSocket, but we use it here in order to find a free port
@@ -44,12 +48,30 @@ public class Server {
                 }
             }
 
+
             // The port we'll listen on
             SocketAddress localport = new InetSocketAddress(port);
 
             // Create and bind a tcp channel to listen for connections on.
             ServerSocketChannel tcpServer = ServerSocketChannel.open();
             tcpServer.socket().bind(localport);
+
+//            int chattingPort;
+//            for (chattingPort = startPort; chattingPort <= stopPort; chattingPort += 1) {
+//                try {
+//                    System.out.println("Searching for a free port to start server on....");
+//                    DatagramSocket datagramSocket = new DatagramSocket(chattingPort);
+//                    System.out.println("Started server on port: " + chattingPort);
+//                    datagramSocket.close();
+//                    break;
+//                } catch (IOException e) {
+//                }
+//            }
+            // The port we'll listen on
+//            SocketAddress localChattingPort = new InetSocketAddress(5678);
+//            ServerSocketChannel tcpServerChat = ServerSocketChannel.open();
+//            tcpServerChat.socket().bind(localChattingPort);
+
 
             // Also create and bind a DatagramChannel to listen on.
             DatagramChannel udpServer = DatagramChannel.open();
@@ -69,6 +91,11 @@ public class Server {
             // to read) we'd like the Selector to wake up for.
             tcpServer.register(selector, SelectionKey.OP_ACCEPT);
             udpServer.register(selector, SelectionKey.OP_READ);
+
+
+            //-----------------------------------------
+            Multimap<User, Message> pendingChats = ArrayListMultimap.create();
+            //-----------------------------------------
 
             //all the users of the chat application
             ArrayList<User> users = new ArrayList<>();
@@ -104,7 +131,16 @@ public class Server {
                         // whether something happend on the TCP or UDP channel
                         if (key.isAcceptable() && c == tcpServer) {
                             //SocketChannel s = tcpServer.accept();
-                            new TCPThread(tcpServer.accept(), users, chatrooms).start();
+                            Chatroom chatroom = new Chatroom();
+                            chatroom.setName("mc");
+                            chatroom.setPolicy("2");
+                            chatroom.setPassword("cM");
+                            chatroom.setOwner(new User("adolfos", InetAddress.getByName("192.168.1.13")));
+                            if (!chatrooms.contains(chatroom)) {
+                                chatrooms.add(chatroom);
+                            }
+
+                            new TCPThread(tcpServer.accept(), users, chatrooms, pendingChats).start();
                         } else if (key.isReadable() && c == udpServer) {
                             //if we don't declare the buffer inside the loop, then in the next iteration of the while loop,
                             //the buffer contents will be lost and the active thread will be left with a null instance,

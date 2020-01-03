@@ -11,6 +11,7 @@ public class User implements Serializable {
     private String role;
     //details include IP address etc.
     private InetAddress details;
+    private int chattingPort;
 
     //constructor that requires username and details
     //this is the only one that should be used all over the application (except for 1-2 cases)
@@ -48,6 +49,14 @@ public class User implements Serializable {
 
     public void setDetails(InetAddress details) {
         this.details = details;
+    }
+
+    public int getChattingPort() {
+        return chattingPort;
+    }
+
+    public void setChattingPort(int chattingPort) {
+        this.chattingPort = chattingPort;
     }
 
     //the authors believe that Username and Details are enough to distinguish between Users
