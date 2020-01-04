@@ -1,4 +1,4 @@
-package com.company;
+package com.company.thread;
 
 import com.company.entity.Chatroom;
 import com.company.entity.User;

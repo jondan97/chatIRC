@@ -3,6 +3,9 @@ package com.company;
 import com.company.entity.Chatroom;
 import com.company.entity.Message;
 import com.company.entity.User;
+import com.company.thread.MulticastPublisher;
+import com.company.thread.TCPThread;
+import com.company.thread.UDPThread;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 
@@ -15,6 +18,9 @@ import java.util.Iterator;
 import java.util.Set;
 
 public class Server {
+//    static Multimap<Chatroom, Message> pendingChatroomMessages = ArrayListMultimap.create();
+//    static ArrayList<Chatroom> chatrooms = new ArrayList<>();
+
     public static void main(String args[]) {
         try {
             //port that the server will run on, it is auto-configured below
@@ -24,6 +30,20 @@ public class Server {
 
             if (args.length > 0)
                 port = Integer.parseInt(args[0]);
+            else {
+                //we dont actually need a datagramSocket, but we use it here in order to find a free port
+                //for our server
+                for (port = startPort; port <= stopPort; port += 1) {
+                    try {
+                        System.out.println("Searching for a free port to start server on....");
+                        DatagramSocket datagramSocket = new DatagramSocket(port);
+                        System.out.println("Started server on port: " + port);
+                        datagramSocket.close();
+                        break;
+                    } catch (IOException e) {
+                    }
+                }
+            }
 
             //allows us to know the server's IP
             InetAddress thisMachine = null;
@@ -35,18 +55,7 @@ public class Server {
 
             System.out.println("Server's IP Address is: " + thisMachine.getHostAddress() + "\n");
 
-            //we dont actually need a datagramSocket, but we use it here in order to find a free port
-            //for our server
-            for (port = startPort; port <= stopPort; port += 1) {
-                try {
-                    System.out.println("Searching for a free port to start server on....");
-                    DatagramSocket datagramSocket = new DatagramSocket(port);
-                    System.out.println("Started server on port: " + port);
-                    datagramSocket.close();
-                    break;
-                } catch (IOException e) {
-                }
-            }
+
 
 
             // The port we'll listen on
@@ -91,18 +100,24 @@ public class Server {
             // to read) we'd like the Selector to wake up for.
             tcpServer.register(selector, SelectionKey.OP_ACCEPT);
             udpServer.register(selector, SelectionKey.OP_READ);
-
-
-            //-----------------------------------------
-            Multimap<User, Message> pendingChats = ArrayListMultimap.create();
-            //-----------------------------------------
-
             //all the users of the chat application
             ArrayList<User> users = new ArrayList<>();
             //test user
             users.add(new User("ska"));
-            //all the chatrooms of the application
+            //-----------------------------------------
+            Multimap<User, Message> pendingChatMessages = ArrayListMultimap.create();
+            Multimap<Chatroom, Message> pendingChatroomMessages = ArrayListMultimap.create();
             ArrayList<Chatroom> chatrooms = new ArrayList<>();
+            MulticastPublisher chatroomMessagePublisher = new MulticastPublisher();
+            //all the chatrooms of the application
+            chatroomMessagePublisher.setChatrooms(chatrooms);
+            chatroomMessagePublisher.setPendingChatroomMessages(pendingChatroomMessages);
+            chatroomMessagePublisher.setUsers(users);
+            //pendingChatroomMessages.put(new Chatroom(), new Message("ESKETIT", new User("ska")));
+            chatroomMessagePublisher.start();
+            //-----------------------------------------
+
+
             //maximum length of received/sent packets
             int datagramPacketMaxLength = 3500;
             // Now loop forever, processing client connections
@@ -130,17 +145,17 @@ public class Server {
                         // Now test the key and the channel to find out
                         // whether something happend on the TCP or UDP channel
                         if (key.isAcceptable() && c == tcpServer) {
-                            //SocketChannel s = tcpServer.accept();
                             Chatroom chatroom = new Chatroom();
                             chatroom.setName("mc");
                             chatroom.setPolicy("2");
                             chatroom.setPassword("cM");
                             chatroom.setOwner(new User("adolfos", InetAddress.getByName("192.168.1.13")));
+                            chatroom.setMulticastAddress(InetAddress.getByName("239.0.0.1"));
                             if (!chatrooms.contains(chatroom)) {
                                 chatrooms.add(chatroom);
                             }
 
-                            new TCPThread(tcpServer.accept(), users, chatrooms, pendingChats).start();
+                            new TCPThread(tcpServer.accept(), users, chatrooms, pendingChatMessages, pendingChatroomMessages).start();
                         } else if (key.isReadable() && c == udpServer) {
                             //if we don't declare the buffer inside the loop, then in the next iteration of the while loop,
                             //the buffer contents will be lost and the active thread will be left with a null instance,

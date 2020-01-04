@@ -1,5 +1,7 @@
-package com.company.entity;
+package com.company.listener;
 
+import com.company.entity.Message;
+import com.company.entity.User;
 import com.company.service.TCPSocketService;
 
 import java.io.BufferedReader;
@@ -27,7 +29,7 @@ public class PrivateChatListener extends Thread {
         try {
             Socket tcpSocket = new Socket(ipString, port);
             TCPSocketService.sendObject("/chattingPort", tcpSocket);
-            System.out.println(tcpSocket.getLocalPort());
+            boolean showSender = true;
             while (true) {
                 if (!showKeystrokes) {
                     Message msg = (Message) TCPSocketService.receiveObject(tcpSocket);
@@ -47,12 +49,26 @@ public class PrivateChatListener extends Thread {
                     }
                 } else if (showKeystrokes) {
                     Message msg = (Message) TCPSocketService.receiveObject(tcpSocket);
-                    System.out.print(msg.getCharacter());
+                    if (showSender) {
+                        System.out.print("(" + msg.getSender().getUsername() + "): ");
+                        showSender = false;
+                    }
+                    if (msg.getKeyValue() == 13) {
+                        System.out.println();
+                        showSender = true;
+                    } else {
+                        System.out.print(msg.getCharacter());
+                    }
                 }
             }
 
         } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
+            try {
+                Socket tcpSocket = new Socket(ipString, port);
+                System.out.println("The server has been restarted.");
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
         }
     }
 

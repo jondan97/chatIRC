@@ -14,6 +14,11 @@ public class Message implements Serializable {
         this.keyValue = keyValue;
     }
 
+    public Message(String character, User sender) {
+        this.character = character;
+        this.sender = sender;
+    }
+
     public int getKeyValue() {
         return keyValue;
     }

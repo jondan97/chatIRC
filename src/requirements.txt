@@ -1,11 +1,11 @@
 - A user registers to the server with an alias (DONE) (TCP)
-- A user can create a new group for chatting (HALF-DONE) (TCP)+(MULTICAST)
+- A user can create a new group for chatting (DONE) (TCP)+(MULTICAST)
 - A creator of a group can delete it (DONE) (TCP)
 - A group creator has the option to delegate group ownership to another group member (DONE) (TCP)
-- A user can join a group according to the access policy defined by the group creator:
+- A user can join a group according to the access policy defined by the group creator: (DONE) (TCP)+(MULTICAST)
 	o Freely join (DONE) (TCP)
 	o Join by entering the password set by the group creator (DONE) (TCP)
-	o Join by asking permission from the group creator
+	o Join by asking permission from the group creator (DONE) (TCP)+(MULTICAST)
 - A group creator can kick a user out the group (DONE) (TCP)
 - A user can view all users in the system (DONE) (TCP)
 - A user can view all groups in the system (DONE) (TCP)

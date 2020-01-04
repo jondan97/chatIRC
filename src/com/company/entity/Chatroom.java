@@ -1,6 +1,7 @@
 package com.company.entity;
 
 import java.io.Serializable;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Objects;
 
@@ -17,6 +18,9 @@ public class Chatroom implements Serializable {
     int kickTime;
     //set by the server admin (who is going to be distinguished by a unique name)
     int deletionTime;
+    //        224.0.1.0 	238.255.255.255 	Globally scoped (Internet-wide) multicast address
+    //        239.0.0.0 	239.255.255.255 	Administratively scoped (local) multicast addresses
+    InetAddress multicastAddress;
 
     //default constructor, only need to declare the array list
     public Chatroom() {
@@ -81,6 +85,13 @@ public class Chatroom implements Serializable {
         this.deletionTime = deletionTime;
     }
 
+    public InetAddress getMulticastAddress() {
+        return multicastAddress;
+    }
+
+    public void setMulticastAddress(InetAddress multicastAddress) {
+        this.multicastAddress = multicastAddress;
+    }
 
     //this method is also shown to the user
     //(the authors are aware that toString is mainly for debugging)

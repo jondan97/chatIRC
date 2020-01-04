@@ -1,4 +1,4 @@
-package com.company;
+package com.company.thread;
 
 import com.company.entity.Chatroom;
 import com.company.entity.Message;
@@ -7,8 +7,8 @@ import com.company.service.TCPSocketService;
 import com.google.common.collect.Multimap;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.Socket;
-import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 
@@ -19,18 +19,24 @@ public class TCPThread extends Thread {
     private ArrayList<User> users;
     private ArrayList<Chatroom> chatrooms;
     private Multimap<User, Message> pendingChats;
-    private ServerSocketChannel chattingServer;
+    Multimap<Chatroom, Message> pendingChatroomMessages;
 
 
-    public TCPThread(SocketChannel socket, ArrayList<User> users, ArrayList<Chatroom> chatrooms, Multimap<User, Message> pendingChats) {
+    public TCPThread(SocketChannel socket, ArrayList<User> users, ArrayList<Chatroom> chatrooms, Multimap<User, Message> pendingChats, Multimap<Chatroom, Message> pendingChatroomMessages) {
         this.socket = socket;
         this.users = users;
         this.chatrooms = chatrooms;
         this.pendingChats = pendingChats;
-        this.chattingServer = chattingServer;
+        this.pendingChatroomMessages = pendingChatroomMessages;
     }
 
     public void run() {
+        int index = 0;
+        // while(index == 0){
+        //System.out.println("XAXAXA");
+        //pendingChatroomMessages.put(new Chatroom(), new Message("ESKETIT", new User("ska")));
+        //System.out.println(pendingChatroomMessages.remove(new Chatroom(), new Message("ESKETIT", new User("ska"))));
+        //}
         Socket client = socket.socket();
 //        try {
 //            TCPSocketService.sendObject(client.getPort(), test);
@@ -98,6 +104,8 @@ public class TCPThread extends Thread {
                                 users.add(registeredUser);
                                 currentUser = registeredUser;
                                 TCPSocketService.sendObject(usernameExists, client);
+                                int userMulticastPort = (int) TCPSocketService.receiveObject(client);
+                                registeredUser.setMulticastPort(userMulticastPort);
                                 break;
                             }
                         }
@@ -195,11 +203,16 @@ public class TCPThread extends Thread {
                         String requestedChatroomName = (String) TCPSocketService.receiveObject(client);
                         Chatroom toBeDeletedChatroom = new Chatroom();
                         toBeDeletedChatroom.setName(requestedChatroomName);
+                        //as if saying "if the owner of the room is the same user who requested to delete it"
                         toBeDeletedChatroom.setOwner(currentUser);
                         boolean chatroomDeleted = false;
                         for (Chatroom room : chatrooms) {
                             if (room.equals(toBeDeletedChatroom)) {
-                                chatrooms.remove(toBeDeletedChatroom);
+                                //notifying all users belonging to this group that it does not exist anymore, so they can remove the multicast ip from their sockets
+                                //lets say we insert a unique sequence
+                                Message notification = new Message("[{[FOR_DELETION]}]|><|" + room.getName(), currentUser);
+                                pendingChatroomMessages.put(room, notification);
+                                //actual deletion is done in the class: "MulticastPublisher", the server needs to notify the users first
                                 chatroomDeleted = true;
                                 TCPSocketService.sendObject(chatroomDeleted, client);
                                 System.out.println("Chatroom '" + toBeDeletedChatroom.getName() + "' has been deleted.");
@@ -220,6 +233,43 @@ public class TCPThread extends Thread {
                     }
                 }
 
+            } else if (receivedMessage.equals("/chatroom")) {
+                System.out.println("User '" + currentUser.getUsername() + "' requested to send a message to a chatroom.");
+                while (true) {
+                    try {
+                        boolean chatroomExists = false;
+                        boolean userIsMember = false;
+                        String requestedChatroomName = (String) TCPSocketService.receiveObject(client);
+                        Chatroom requestedChatroom = null;
+                        for (Chatroom chatroom : chatrooms) {
+                            if (chatroom.getName().toLowerCase().equals(requestedChatroomName.toLowerCase())) {
+                                chatroomExists = true;
+                                for (User u : chatroom.getUsers()) {
+                                    if (u.equals(currentUser)) {
+                                        userIsMember = true;
+                                        requestedChatroom = chatroom;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        TCPSocketService.sendObject(chatroomExists, client);
+                        TCPSocketService.sendObject(userIsMember, client);
+                        if (chatroomExists && userIsMember) {
+                            String messageString = (String) TCPSocketService.receiveObject(client);
+                            Message message = new Message(messageString, currentUser);
+                            pendingChatroomMessages.put(requestedChatroom, message);
+                            break;
+                        }
+                        if (!chatroomExists || !userIsMember) {
+                            continue;
+                        }
+                    } catch (IOException e) {
+                        break;
+                    } catch (ClassNotFoundException e) {
+                        e.printStackTrace();
+                    }
+                }
             } else if (receivedMessage.equals("/createchatroom")) {
                 System.out.println("User '" + currentUser.getUsername() + "' requested to create a chatroom.");
                 while (true) {
@@ -247,6 +297,16 @@ public class TCPThread extends Thread {
                                 requestedChatroom.setPassword(password);
                             }
                             requestedChatroom.getUsers().add(currentUser);
+                            if (chatrooms.isEmpty()) {
+                                InetAddress firstMulticastAddress = InetAddress.getByName("230.0.0.0");
+                                requestedChatroom.setMulticastAddress(firstMulticastAddress);
+                            } else if (!chatrooms.isEmpty()) {
+                                InetAddress previousMulticastAddress = chatrooms.get(chatrooms.size() - 1).getMulticastAddress();
+                                String nextMulticastAddressString = MulticastPublisher.getNextIPV4Address(previousMulticastAddress);
+                                InetAddress nextMulticastAddress = InetAddress.getByName(nextMulticastAddressString);
+                                requestedChatroom.setMulticastAddress(nextMulticastAddress);
+                                TCPSocketService.sendObject(nextMulticastAddress, client);
+                            }
                             requestedChatroom.getUsers().add(new User("ska"));
                             chatrooms.add(requestedChatroom);
                             break;
@@ -287,6 +347,7 @@ public class TCPThread extends Thread {
                                     requestedChatroom.getUsers().add(currentUser);
                                     joined = true;
                                     TCPSocketService.sendObject(joined, client);
+                                    TCPSocketService.sendObject(requestedChatroom.getMulticastAddress(), client);
                                     break;
                                 } else {
                                     TCPSocketService.sendObject(joined, client);
@@ -294,6 +355,10 @@ public class TCPThread extends Thread {
                                 }
                             }
                             break;
+                        } else if (policy.equals("3")) {
+                            TCPSocketService.sendObject(policy, client);
+                            Message notificationToOwner = new Message("[{[PERMISSION_ASKED]}]|><|", currentUser);
+                            pendingChatroomMessages.put(requestedChatroom, notificationToOwner);
                         }
 
 
@@ -333,7 +398,12 @@ public class TCPThread extends Thread {
                                 boolean userKicked = false;
                                 for (User user : currentChatroom.getUsers()) {
                                     if (user.getUsername().toLowerCase().equals(userToBeKickedName.toLowerCase()) && !user.equals(currentUser)) {
-                                        currentChatroom.getUsers().remove(user);
+                                        //currentChatroom.getUsers().remove(user);
+                                        //we put 'user' because we only need to send that message to that particular user(that he was kicked), essentially
+                                        //changing the multicast feature to a unicast for this case
+                                        Message notification = new Message("[{[GOT_KICKED]}]|><|" + currentChatroom.getName(), user);
+                                        pendingChatroomMessages.put(currentChatroom, notification);
+                                        // we do not remove the user yet (similarly to deletion), we let the users know first and then we remove him
                                         userKicked = true;
                                         TCPSocketService.sendObject(userKicked, client);
                                         break;
@@ -418,8 +488,6 @@ public class TCPThread extends Thread {
                 }
 
             } else if (receivedMessage.equals(("/chattingPort"))) {
-                currentUser.setChattingPort(client.getPort());
-                System.out.println(currentUser.getChattingPort());
                 while (true) {
 //                    if(!pendingChats.isEmpty()){
 //                               for(Map.Entry<User,User> e: pendingChats.entries()){
@@ -457,10 +525,40 @@ public class TCPThread extends Thread {
 //                } catch (IOException | InterruptedException e) {
 //                    e.printStackTrace();
 //                }
+            }
+            //once again, no need for checking as this has been done in other parts of the code (see 'joinchatroom' for example)
+            else if (receivedMessage.equals("/permissions")) {
+                try {
+                    String answer = (String) TCPSocketService.receiveObject(client);
+                    if (answer.equals("y")) {
+                        String username = (String) TCPSocketService.receiveObject(client);
+                        String chatroomName = (String) TCPSocketService.receiveObject(client);
+                        User wantedUser = null;
+                        Chatroom wantedChatroom = null;
+                        for (User user : users) {
+                            if (user.getUsername().toLowerCase().equals(username.toLowerCase())) {
+                                wantedUser = user;
+                                break;
+                            }
+                        }
+                        for (Chatroom chatroom : chatrooms) {
+                            if (chatroom.getName().toLowerCase().equals(chatroomName.toLowerCase())) {
+                                wantedChatroom = chatroom;
+                                chatroom.getUsers().add(wantedUser);
+                                break;
+                            }
+                        }
+                        pendingChatroomMessages.put(wantedChatroom, new Message("[{[PERMISSION_ACCEPTED]}]|><|", wantedUser));
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (ClassNotFoundException e) {
+                    e.printStackTrace();
+                }
             } else if (receivedMessage.equals("/exit")) {
                 try {
                     socket.close();
-                    System.out.println("Connection has been closed!!!.");
+                    System.out.println("Connection has been closed.");
                     break;
                 } catch (IOException e) {
                     e.printStackTrace();
