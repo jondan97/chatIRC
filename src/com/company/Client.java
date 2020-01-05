@@ -408,7 +408,6 @@ public class Client {
                         userInputSentToServer = userInput.readLine();
                         TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                         String chatroomNameExists = (String) TCPSocketService.receiveObject(tcpSocket);
-                        System.out.println(chatroomNameExists);
                         //0 means chatroom does not exist, 1-3 are the respective policies
                         switch (chatroomNameExists) {
                             case "0":
@@ -417,7 +416,6 @@ public class Client {
                             case "1":
                                 //boolean joinedChatroom = (boolean) TCPSocketService.receiveObject(tcpSocket);
                                 InetAddress multicastAddress = (InetAddress) TCPSocketService.receiveObject(tcpSocket);
-                                System.out.println(multicastAddress);
                                 chatroomListener.addChatroomMulticastAddress(multicastAddress);
                                 System.out.println("You have successfully joined the chatroom.");
                                 break;
@@ -555,7 +553,7 @@ public class Client {
         } catch (SocketTimeoutException e) {
             System.out.println("Looks like the server is not up. Try again later.");
         } catch (IOException | ClassNotFoundException e) {
-            System.out.println("Lost connection to server.");
+            System.out.println("Lost connection to server. Please restart the application.");
         }
         System.out.println("Exiting...");
 

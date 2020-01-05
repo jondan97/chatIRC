@@ -404,7 +404,6 @@ public class TCPThread extends Thread {
                     try {
                         String policy = "0";
                         String requestedChatroomName = (String) TCPSocketService.receiveObject(client);
-                        System.out.println(requestedChatroomName);
                         Chatroom requestedChatroom = null;
                         //this is not the best solution but in order to avoid concurrent modification exceptions
                         //on the same list we will have to copy it and work on searching on that
@@ -416,25 +415,19 @@ public class TCPThread extends Thread {
                             }
                         }
                         TCPSocketService.sendObject(policy, client);
-                        System.out.println(policy);
                         boolean joinedChatroom = false;
                         switch (policy) {
                             case "0":
-                                System.out.println("does not exist");
                                 continue;
                             case "1":
-                                System.out.println("free");
                                 joinedChatroom = true;
                                 requestedChatroom.getUsers().add(currentUser);
                                 break;
                             case "2":
-                                System.out.println("password");
                                 boolean foundPassword = false;
                                 while (true) {
                                     String password = (String) TCPSocketService.receiveObject(client);
-                                    System.out.println(password);
                                     if (requestedChatroom.getPassword().equals(password)) {
-                                        System.out.println("positive");
                                         requestedChatroom.getUsers().add(currentUser);
                                         foundPassword = true;
                                         TCPSocketService.sendObject(foundPassword, client);
@@ -445,7 +438,6 @@ public class TCPThread extends Thread {
                                 }
                                 break;
                             case "3":
-                                System.out.println("notification");
                                 //send to the owner a notification that a new user wants to join the group
                                 Message notificationToOwner = new Message("[{[PERMISSION_ASKED]}]|><|", currentUser);
                                 pendingChatroomMessages.put(requestedChatroom, notificationToOwner);

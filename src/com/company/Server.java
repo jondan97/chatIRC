@@ -135,7 +135,6 @@ public class Server {
             // Now loop forever, processing client connections
             while (true) {
                 try { // Handle per-connection problems below
-                    //System.out.println(selector.select() + " (selected)");
                     // Wait for a client to connect
                     selector.select();
                     // Get the SelectionKey objects for the channels that have
@@ -147,12 +146,10 @@ public class Server {
                     for (Iterator<SelectionKey> i = keys.iterator(); i.hasNext(); ) {
                         // Get a key from the set, and remove it from the set
                         SelectionKey key = i.next();
-                        //System.out.println(key+ " (key)");
                         i.remove();
 
                         // Get the channel associated with the key
                         Channel c = key.channel();
-                        //System.out.println(c.toString() + " (channel)");
 
                         // Now test the key and the channel to find out
                         // whether something happened on the TCP or UDP channel

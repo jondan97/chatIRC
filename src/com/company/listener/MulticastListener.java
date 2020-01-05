@@ -97,6 +97,7 @@ public class MulticastListener extends Thread {
                 }
                 //waiting for user input to finish and then sending the message received
                 userInput.ready();
+                //already made message so we can print the value
                 System.out.println(received);
             } catch (IOException e) {
                 e.printStackTrace();
