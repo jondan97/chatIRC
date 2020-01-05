@@ -2,7 +2,6 @@ package com.company.thread;
 
 import com.company.entity.Chatroom;
 import com.company.entity.Message;
-import com.company.entity.Record;
 import com.company.entity.User;
 import com.google.common.collect.Multimap;
 
@@ -10,36 +9,40 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 //this class reads notifications that were added to a multimap (pendingChatroomMessages) and multicasts it to multiple
 //users, servers as a middle-man for chatroom members to communicate
 //also used as a notification publisher, sending unicasted messages to users that need to be informed about something
 //(kicked/accepted etc.)
 public class MulticastPublisher extends Thread {
-    private DatagramSocket socket;
     //list of all the chatrooms in the application
     private List<Chatroom> chatrooms;
     //a multimap that contains the chatroom, and the message that needs to be multicasted to all the members
     private Multimap<Chatroom, Message> pendingChatroomMessages;
     //a list of all the users in the application
     private List<User> users;
-    //a list of records that contain when was the last time a user typed something (in a particular chatroom)
-    private List<Record> userActivity;
     //a sort of 'custom latch' made for communication between chatroomActivityChecker thread and MulticastPublisher thread
     //the Checkers send a multimap key/value pair to the Publisher and then 'locks', waiting for the Publisher to finish with the pair.
     //When the Publisher finishes with the pair, it sets the latch to 0 and the Checker 'unlocks' and sets the next pair
     private AtomicInteger latch;
 
     //constructor
-    public MulticastPublisher(List<Chatroom> chatrooms, Multimap<Chatroom, Message> pendingChatroomMessages, List<User> users, List<Record> userActivity, AtomicInteger latch) {
+    public MulticastPublisher(List<Chatroom> chatrooms, Multimap<Chatroom, Message> pendingChatroomMessages, List<User> users, AtomicInteger latch) {
         this.chatrooms = chatrooms;
         this.pendingChatroomMessages = pendingChatroomMessages;
         this.users = users;
-        this.userActivity = userActivity;
         this.latch = latch;
     }
 
@@ -90,9 +93,10 @@ public class MulticastPublisher extends Thread {
                         Map.Entry<Chatroom, Message> e = (Map.Entry<Chatroom, Message>) mapIterator.next();
                         InetAddress chatroomMulticastAddress = e.getKey().getMulticastAddress();
                         //same as the outer synchronization
-                        //"so we don't have a ConcurrentModificationException"
+                        //"so we don't have a ConcurrentModificationException", a failed attempt on not having the
+                        //exception
                         synchronized (chatrooms) {
-                            for (Chatroom wantedChatroom : chatrooms) {
+                            for (Chatroom wantedChatroom : new ArrayList<>(chatrooms)) {
                                 if (wantedChatroom.equals(e.getKey())) {
                                     chatroom = e.getKey();
                                     message = e.getValue();
@@ -128,8 +132,9 @@ public class MulticastPublisher extends Thread {
                                     //what pathway condition will be chosen, depends on the boolean that accompanied
                                     //the unique sequences, for example for deletion, we also delete the
                                     //chatroom from the chatrooms list
+                                    DatagramSocket socket = null;
                                     if (permissionAsked) {
-                                        for (User multicastReceiver : users) {
+                                        for (User multicastReceiver : new ArrayList<>(users)) {
                                             if (multicastReceiver.getUsername().toLowerCase().equals(e.getKey().getOwner().getUsername().toLowerCase())) {
                                                 try {
                                                     DatagramPacket packet
@@ -139,16 +144,17 @@ public class MulticastPublisher extends Thread {
                                                     socket.close();
                                                 } catch (IOException ex) {
                                                     ex.printStackTrace();
+                                                    socket.close();
                                                 }
-                                                wantedChatroom.getUsers().remove(message.getSender());
                                                 permissionAsked = false;
                                                 break;
                                             }
                                         }
                                     } else if (accepted) {
-                                        for (User multicastReceiver : users) {
+                                        for (User multicastReceiver : new ArrayList<>(users)) {
                                             if (multicastReceiver.equals(e.getValue().getSender())) {
                                                 try {
+                                                    //once again: 239.0.0.0 is the 'official' multicast address for users to receive notifications
                                                     DatagramPacket packet
                                                             = new DatagramPacket(buf, buf.length, InetAddress.getByName("239.0.0.0"), multicastReceiver.getMulticastPort());
                                                     accepted = false;
@@ -157,15 +163,17 @@ public class MulticastPublisher extends Thread {
                                                     socket.close();
                                                 } catch (IOException ex) {
                                                     ex.printStackTrace();
+                                                    socket.close();
                                                 }
-                                                wantedChatroom.getUsers().remove(message.getSender());
+                                                //adding the user is done in the '/permissions' (server-side) section
+                                                //wantedChatroom.getUsers().add(message.getSender());
                                                 break;
                                             }
                                         }
                                     }
                                     //turning the multicast feature into a unicast one by only sending the packet to the kicked user in order to notify him
                                     else if (kicked) {
-                                        for (User multicastReceiver : wantedChatroom.getUsers()) {
+                                        for (User multicastReceiver : new ArrayList<>(wantedChatroom.getUsers())) {
                                             if (multicastReceiver.equals(e.getValue().getSender())) {
                                                 DatagramPacket packet
                                                         = new DatagramPacket(buf, buf.length, chatroomMulticastAddress, multicastReceiver.getMulticastPort());
@@ -175,6 +183,7 @@ public class MulticastPublisher extends Thread {
                                                     socket.close();
                                                 } catch (IOException ex) {
                                                     ex.printStackTrace();
+                                                    socket.close();
                                                 }
                                                 wantedChatroom.getUsers().remove(message.getSender());
                                                 kicked = false;
@@ -183,7 +192,7 @@ public class MulticastPublisher extends Thread {
                                         }
                                         //if chatroom needs to be deleted
                                     } else {
-                                        for (User multicastReceiver : wantedChatroom.getUsers()) {
+                                        for (User multicastReceiver : new ArrayList<>(wantedChatroom.getUsers())) {
                                             DatagramPacket packet
                                                     = new DatagramPacket(buf, buf.length, chatroomMulticastAddress, multicastReceiver.getMulticastPort());
                                             try {
@@ -192,6 +201,7 @@ public class MulticastPublisher extends Thread {
                                                 socket.close();
                                             } catch (IOException ex) {
                                                 ex.printStackTrace();
+                                                socket.close();
                                             }
                                         }
                                     }

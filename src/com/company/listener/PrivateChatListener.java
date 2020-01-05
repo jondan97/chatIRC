@@ -8,6 +8,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.HashMap;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 public class PrivateChatListener extends Thread {
 
@@ -63,12 +70,7 @@ public class PrivateChatListener extends Thread {
             }
 
         } catch (IOException | ClassNotFoundException e) {
-            try {
-                Socket tcpSocket = new Socket(ipString, port);
-                System.out.println("The server has been restarted.");
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+            System.out.println("Lost connection to server.");
         }
     }
 

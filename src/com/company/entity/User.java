@@ -3,6 +3,13 @@ package com.company.entity;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.Objects;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 public class User implements Serializable {
 

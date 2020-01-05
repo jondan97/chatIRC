@@ -5,6 +5,13 @@ import java.io.IOException;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 //mainly used as a service that serves TCP functionalities
 public class UDPSocketService {
@@ -30,8 +37,7 @@ public class UDPSocketService {
     //returns a ByteBuffer that includes the original message
     public static ByteBuffer newQuickConfirmationPacket(String message) {
         byte[] messageByteArray = message.getBytes();
-        ByteBuffer buf = ByteBuffer.wrap(messageByteArray);
-        return buf;
+        return ByteBuffer.wrap(messageByteArray);
     }
 
     //mainly used by the server to answer to questions:
@@ -44,7 +50,6 @@ public class UDPSocketService {
         ObjectOutput oo = new ObjectOutputStream(bStream);
         oo.writeObject(o);
         oo.close();
-        byte[] serializedObject = bStream.toByteArray();
-        return serializedObject;
+        return bStream.toByteArray();
     }
 }

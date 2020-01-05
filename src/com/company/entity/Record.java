@@ -2,6 +2,13 @@ package com.company.entity;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 public class Record {
 

@@ -7,6 +7,13 @@ import com.google.common.collect.Multimap;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 //parent class for the two children: chatroom and user activity checker
 //this mainly works as a "grouped methods/attributes" class that both children checkers share

@@ -53,6 +53,7 @@ public class Server {
             } catch (UnknownHostException e) {
                 e.printStackTrace();
             }
+            assert thisMachine != null;
             System.out.println("Server's IP Address is: " + thisMachine.getHostAddress() + "\n");
 
 
@@ -116,7 +117,7 @@ public class Server {
             AtomicInteger latch = new AtomicInteger(0);
 
             //main thread that handles all the multicast messages, mainly handling group messages and notifications to users
-            MulticastPublisher chatroomMessagePublisher = new MulticastPublisher(chatrooms, pendingChatroomMessages, users, userActivity, latch);
+            MulticastPublisher chatroomMessagePublisher = new MulticastPublisher(chatrooms, pendingChatroomMessages, users, latch);
             chatroomMessagePublisher.start();
 
             //main thread that concerns user activity, checks for expired records and manages/kicks users that have not messaged in a chat for a threshold

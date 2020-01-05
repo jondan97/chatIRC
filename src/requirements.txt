@@ -6,7 +6,7 @@
 	o Freely join (DONE) (TCP)
 	o Join by entering the password set by the group creator (DONE) (TCP)
 	o Join by asking permission from the group creator (DONE) (TCP)+(MULTICAST)
-- A group creator can kick a user out the group (DONE) (TCP)
+- A group creator can kick a user out of the group (DONE) (TCP)
 - A user can view all users in the system (DONE) (TCP)
 - A user can view all groups in the system (DONE) (TCP)
 - A user can view all users in a group (DONE) (TCP)

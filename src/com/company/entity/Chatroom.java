@@ -5,6 +5,13 @@ import java.net.InetAddress;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Objects;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 public class Chatroom implements Serializable {
     User owner;
@@ -103,12 +110,16 @@ public class Chatroom implements Serializable {
     @Override
     public String toString() {
         String policyReadable = null;
-        if (this.policy.equals("1")) {
-            policyReadable = "Free";
-        } else if (this.policy.equals("2")) {
-            policyReadable = "Password-Protected";
-        } else if (this.policy.equals("3")) {
-            policyReadable = "Permission-Required";
+        switch (this.policy) {
+            case "1":
+                policyReadable = "Free";
+                break;
+            case "2":
+                policyReadable = "Password-Protected";
+                break;
+            case "3":
+                policyReadable = "Permission-Required";
+                break;
         }
         return "Chatroom(" +
                 "" + name + "): " +

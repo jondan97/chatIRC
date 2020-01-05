@@ -8,9 +8,15 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 public class MulticastListener extends Thread {
     //the datagram length shared across client (and server if adjusted)
@@ -43,8 +49,6 @@ public class MulticastListener extends Thread {
             //this address is reserved for all users, users listen to this IP when a client asked for permission
             //to join any of the groups the user is owner of
             socket.joinGroup(InetAddress.getByName("239.0.0.0"));
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -96,6 +100,7 @@ public class MulticastListener extends Thread {
                 System.out.println(received);
             } catch (IOException e) {
                 e.printStackTrace();
+                continue;
             }
 
         }

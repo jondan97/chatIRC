@@ -48,6 +48,7 @@ public class Client {
                     datagramSocket.close();
                     break;
                 } catch (IOException e) {
+                    continue;
                 }
             }
         }
@@ -61,12 +62,13 @@ public class Client {
                 "/whisper - Send a message to someone in private. \n" +
                 "/chatroom - Send a message to a chatroom. All other users that belong to the group will be able to read it. \n" +
                 "/createChatroom - Create a new chatroom for messaging with multiple users. \n" +
-                "/chatroomDeletionAdmin - Set the Universal Deletion Time (Reserved for admins). \n" +
+                "/chatroomDeletionTime - Set the Universal Deletion Time (Reserved for admins). \n" +
                 "/joinChatroom - Join an already existing chatroom and send and read messages from other users. \n" +
                 "/kickFromChatroom - Kick a user out of a chatroom (Provided you are the owner). \n" +
                 "/delegateChatroomOwnership - Delegate the ownership of a chatroom to another user (Provided you are the owner). \n" +
                 "/permissions - Check for notifications concerning users that want to join one of your prohibited chatrooms. \n" +
                 "/keystrokes - Gives the ability to see live in real-time the keystrokes of the other user (Support for one user only)  \n" +
+                "/refresh - Refreshes the command line for any new messages/notifications \n" +
                 "/help - Shows all available commands again. \n" +
                 "/exit - Exits the application. \n";
         System.out.println(help);
@@ -142,7 +144,6 @@ public class Client {
                     usernameExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
                     if (usernameExists) {
                         System.out.println("Username you have chosen already exists, please choose another.");
-                        continue;
                     } else if (!usernameExists) {
                         TCPSocketService.sendObject(multicastPort, tcpSocket);
                         thisClient = new User(username, thisMachine);
@@ -162,7 +163,7 @@ public class Client {
                 @Override
                 public void keyPressed(GlobalKeyEvent event) {
                     try {
-                        if (run == true) {
+                        if (run) {
                             String keyChar = String.valueOf(event.getKeyChar());
                             TCPSocketService.sendObject(keyChar, tcpSocket);
                             TCPSocketService.sendObject(event.getVirtualKeyCode(), tcpSocket);
@@ -171,7 +172,7 @@ public class Client {
                             }
                         }
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        System.out.println("Lost connection to server.");
                     }
                 }
             });
@@ -185,14 +186,21 @@ public class Client {
             PrivateChatListener chat = new PrivateChatListener(ipString, port, userInput);
             chat.start();
 
+            //waiting for input - first time entering the loop, we need to display this message outside of it
+            //because we are also going to show the same message in the end of the loop
+            //this happens because we need to take under consideration println lines that are produced by
+            //other threads, such as chat messages, therefore we need to sort all the println lines, produced, in a
+            //user-friendly order
+            System.out.println("Type text to send to the server: ");
             //more info about the requests can be found in the server-side of this application
             while (true) {
+                //boolean that checks if the user requested to see the "typed text to send to the server:" text
+                boolean refresh = false;
                 //always checks at the beginning if there are new permissions
                 if (!permissions.isEmpty()) {
                     System.out.println("You have [" + permissions.size() + "] users asking for permission to join a group of yours.");
                 }
                 //waiting for input
-                System.out.println("Type text to send to the server: ");
                 userInputSentToServer = userInput.readLine();
                 //user input is always lowercase, commands could be written any way
                 //for example: '/showAllChatrooms' or '/showallchatrooms' or '/SHOWALLCHATROOMS'
@@ -205,7 +213,8 @@ public class Client {
                     tcpSocket.close();
                     break;
                     //this makes the buffered reader ready, so it allows other classes to send any notifications they might have
-                } else if (userInputSentToServer.equals("/refresh")) {
+                } else if (userInputSentToServer.equals("/refresh") || userInputSentToServer.equals("")) {
+                    refresh = true;
                     continue;
                     //for chatting in a group/chatroom
                     //the client is prompted to enter the chatroom name, if it exists and he is a member of it, he can proceed with sending a message
@@ -219,7 +228,6 @@ public class Client {
                         boolean userIsMember = (boolean) TCPSocketService.receiveObject(tcpSocket);
                         if (!chatroomExists) {
                             System.out.println("Chatroom name does not exist.");
-                            continue;
                         } else if (chatroomExists) {
                             if (!userIsMember) {
                                 System.out.println("You are not a member of this group");
@@ -292,11 +300,12 @@ public class Client {
                             System.out.println("What is the message you want to sent to him?");
                             run = true;
                             //not really needed but simulating that user is typing:
+                            //(not needed because the key listener records what the user types and sends it)
                             userInputSentToServer = userInput.readLine();
+                            System.out.println("Message sent.");
                             break;
                         } else if (wantedUser == null) {
                             System.out.println("User does not exist.");
-                            continue;
                         }
                     }
                     //shows all chatrooms that exist on the server
@@ -333,30 +342,24 @@ public class Client {
                 //request to see all users of a particular chatroom
                 else if (userInputSentToServer.equals("/showchatroomusers")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
-
                     while (true) {
                         System.out.println("What is the name of the chatroom you want to see the users of?");
                         userInputSentToServer = userInput.readLine();
                         TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                         boolean chatroomExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
                         if (chatroomExists) {
+                            List<User> chatroomUsers = (List) TCPSocketService.receiveObject(tcpSocket);
+                            if (chatroomUsers.isEmpty()) {
+                                System.out.println("No users exist in this chatroom.");
+                            } else {
+                                for (User user : chatroomUsers) {
+                                    System.out.println(user.getUsername());
+                                }
+                            }
                             break;
                         } else if (!chatroomExists) {
                             System.out.println("Chatroom does not exist.");
-                            continue;
                         }
-                    }
-                    try {
-                        List<User> chatroomUsers = (List) TCPSocketService.receiveObject(tcpSocket);
-                        if (chatroomUsers.isEmpty()) {
-                            System.out.println("No users exist in this chatroom.");
-                        } else {
-                            for (User user : chatroomUsers) {
-                                System.out.println(user.getUsername());
-                            }
-                        }
-                    } catch (ClassNotFoundException e) {
-                        e.printStackTrace();
                     }
                 }
                 //request to delegate chatroom ownership to a new owner provided the client is the current owner and the new owner exists in the group
@@ -384,7 +387,6 @@ public class Client {
                                     break;
                                 } else if (!userExists) {
                                     System.out.println("User does not exist in this group.");
-                                    continue;
                                 }
 
                             }
@@ -408,34 +410,37 @@ public class Client {
                         String chatroomNameExists = (String) TCPSocketService.receiveObject(tcpSocket);
                         System.out.println(chatroomNameExists);
                         //0 means chatroom does not exist, 1-3 are the respective policies
-                        if (chatroomNameExists.equals("0")) {
-                            System.out.println("Chatroom name does not exist, please input the correct name.");
-                            continue;
-                        } else if (chatroomNameExists.equals("1")) {
-                            InetAddress multicastAddress = (InetAddress) TCPSocketService.receiveObject(tcpSocket);
-                            System.out.println(multicastAddress);
-                            chatroomListener.addChatroomMulticastAddress(multicastAddress);
-                            System.out.println("You have successfully joined the chatroom.");
-                        } else if (chatroomNameExists.equals("2")) {
-                            while (true) {
-                                System.out.println("What is the password of the chatroom?");
-                                userInputSentToServer = userInput.readLine();
-                                TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
-                                boolean joined = (boolean) TCPSocketService.receiveObject(tcpSocket);
-                                if (joined) {
-                                    InetAddress multicastAddress = (InetAddress) TCPSocketService.receiveObject(tcpSocket);
-                                    System.out.println(multicastAddress);
-                                    chatroomListener.addChatroomMulticastAddress(multicastAddress);
-                                    System.out.println("You have successfully joined the chatroom.");
-                                    break;
-                                } else if (!joined) {
-                                    System.out.println("Password is incorrect, please type the correct password.");
-                                    continue;
+                        switch (chatroomNameExists) {
+                            case "0":
+                                System.out.println("Chatroom name does not exist, please input the correct name.");
+                                continue;
+                            case "1":
+                                //boolean joinedChatroom = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                                InetAddress multicastAddress = (InetAddress) TCPSocketService.receiveObject(tcpSocket);
+                                System.out.println(multicastAddress);
+                                chatroomListener.addChatroomMulticastAddress(multicastAddress);
+                                System.out.println("You have successfully joined the chatroom.");
+                                break;
+                            case "2":
+                                while (true) {
+                                    System.out.println("What is the password of the chatroom?");
+                                    userInputSentToServer = userInput.readLine();
+                                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                                    boolean foundPassword = (boolean) TCPSocketService.receiveObject(tcpSocket);
+                                    if (foundPassword) {
+                                        InetAddress chatroomMulticastAddress = (InetAddress) TCPSocketService.receiveObject(tcpSocket);
+                                        chatroomListener.addChatroomMulticastAddress(chatroomMulticastAddress);
+                                        System.out.println("You have successfully joined the chatroom.");
+                                        break;
+                                    } else if (!foundPassword) {
+                                        System.out.println("Password is incorrect, please type the correct password.");
+                                    }
                                 }
-                            }
+                                break;
                             //this is done through UDP multicast now
-                        } else if (chatroomNameExists.equals("3")) {
-                            System.out.println("Permission request has been sent to owner. You will be notified.");
+                            case "3":
+                                System.out.println("Permission request has been sent to owner. You will be notified.");
+                                break;
                         }
                         break;
                     }
@@ -461,13 +466,11 @@ public class Client {
                                     break;
                                 } else if (!userKicked) {
                                     System.out.println("User does not exist in this group or you cannot kick yourself.");
-                                    continue;
                                 }
                             }
                             break;
                         } else if (!chatroomNameExists) {
                             System.out.println("Chatroom name does not exist or you are not the owner.");
-                            continue;
                         }
                     }
                     //mainly for debugging, allows the client to know the multicast IPs of the chatrooms he is a part of
@@ -487,7 +490,6 @@ public class Client {
                         boolean alreadyExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
                         if (alreadyExists) {
                             System.out.println("Chatroom name already exists, please choose another.");
-                            continue;
                         } else if (!alreadyExists) {
                             System.out.println("What is going to be the policy of the chatroom? (1=Free, 2=Password-Protected, 3=Permission-Required)");
                             userInputSentToServer = userInput.readLine();
@@ -523,7 +525,6 @@ public class Client {
                             break;
                         } else if (!chatroomDeleted) {
                             System.out.println("Chatroom name you entered does not exist or you are not the owner.");
-                            continue;
                         }
                     }
                     //request to see all the commands available in the application
@@ -542,16 +543,19 @@ public class Client {
                         System.out.println("The server did not understand your question.");
                     }
                 }
+                if (!refresh) {
+                    //waiting for input - message that is always soon after every loop, unless the user requests a
+                    //refresh by typing "/refresh" or ""
+                    System.out.println("Type text to send to the server: ");
+                }
             }
 
         } catch (UnknownHostException e) {
             System.out.println("Unable to connect to IP/Host-Name given. ");
         } catch (SocketTimeoutException e) {
             System.out.println("Looks like the server is not up. Try again later.");
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+        } catch (IOException | ClassNotFoundException e) {
+            System.out.println("Lost connection to server.");
         }
         System.out.println("Exiting...");
 

@@ -6,7 +6,15 @@ import com.company.entity.Record;
 import com.company.entity.User;
 import com.google.common.collect.Multimap;
 
+import java.util.ArrayList;
 import java.util.List;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 //thread that checks for user activity
 //checks all records and if a record is expired, meaning that a user hasn't typed in a chatroom for too long, he gets kicked
@@ -31,14 +39,14 @@ public class UserActivityChecker extends ActivityChecker {
             if (!userActivity.isEmpty()) {
                 //resetting
                 Record wantedRecord = null;
-                for (Record record : userActivity) {
+                for (Record record : new ArrayList<>(userActivity)) {
                     //calculate time, if bigger than chatroom 'default' time, then kick user
                     long minuteDifferenceFromNow = calculateMinutesFromNow(record.getTime());
                     if (minuteDifferenceFromNow >= (long) record.getChatroom().getKickTime()) {
                         Chatroom wantedChatroom = record.getChatroom();
-                        for (Chatroom room : chatrooms) {
+                        for (Chatroom room : new ArrayList<>(chatrooms)) {
                             if (room.equals(wantedChatroom)) {
-                                for (User wantedUser : wantedChatroom.getUsers()) {
+                                for (User wantedUser : new ArrayList<>(wantedChatroom.getUsers())) {
                                     if (wantedUser.equals(record.getUser())) {
                                         wantedRecord = record;
                                         expiredRecordFound = true;
@@ -59,7 +67,6 @@ public class UserActivityChecker extends ActivityChecker {
                 }
                 if (wantedRecord != null) {
                     userActivity.remove(wantedRecord);
-                    continue;
                 }
             }
         }

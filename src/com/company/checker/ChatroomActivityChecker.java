@@ -7,6 +7,13 @@ import com.google.common.collect.Multimap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 //thread that mainly handles chatrooms that are inactive, all inactive chatrooms are deleted
 //concerns chatroom activity, checks for expired chatrooms based on the universalChatroomDeletionTime attribute, if a chatroom exceeds that number
@@ -48,6 +55,7 @@ public class ChatroomActivityChecker extends ActivityChecker {
                         latch.set(1);
                         while (latch.get() == 1) {
                             try {
+                                //checking every now and then if the other thread finished
                                 Thread.sleep(10);
                             } catch (InterruptedException e) {
                                 e.printStackTrace();

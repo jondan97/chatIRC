@@ -7,7 +7,15 @@ import com.company.service.UDPSocketService;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.channels.DatagramChannel;
+import java.util.ArrayList;
 import java.util.List;
+/*
+ * AUTHORS
+ * IOANNIS DANIIL
+ * MICHAEL-ANGELO DAMALAS
+ * ALEX TATTOS
+ * CHRIS DILERIS
+ * */
 
 public class UDPThread extends Thread {
     //all the users on the server
@@ -35,7 +43,7 @@ public class UDPThread extends Thread {
     @Override
     public void run() {
         try {
-            for (User user : users) {
+            for (User user : new ArrayList<>(users)) {
                 //this detects if the user already exists, if he exists then set him as current user
                 //this would be safer if I could know the mac-address but going into too much security
                 //also for some reason some host names are saved in lowercase (no idea why) while they are
@@ -60,9 +68,11 @@ public class UDPThread extends Thread {
                 //this exception always hits: the end of file is reached for the ObjectInputStream
                 //and an exception is always thrown, so we need to catch it and handle it 'appropriately'
             } catch (EOFException e) {
+                assert iStream != null;
                 iStream.close();
             } catch (IOException e) {
                 e.printStackTrace();
+                udpserver.close();
             }
             if (currentUser != null) {
                 System.out.println("UDP request read from '" + currentUser.getUsername() + "'.");
@@ -91,10 +101,9 @@ public class UDPThread extends Thread {
                     }
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
+            System.out.println("Received an unknown packet.");
         }
     }
 }
