@@ -9,7 +9,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 public class remoteHost {
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         try {
             // Create an InetAddress object based on the host name the user supplied.
             InetAddress hostMachine = InetAddress.getByName("john-pc");
@@ -25,7 +25,7 @@ public class remoteHost {
             return;
         }
     }
-};
+}
 
 /*
  * Example:

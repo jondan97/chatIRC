@@ -2,6 +2,7 @@ package com.company.thread;
 
 import com.company.entity.Chatroom;
 import com.company.entity.Message;
+import com.company.entity.Record;
 import com.company.entity.User;
 import com.google.common.collect.Multimap;
 
@@ -9,16 +10,42 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
+//this class reads notifications that were added to a multimap (pendingChatroomMessages) and multicasts it to multiple
+//users, servers as a middle-man for chatroom members to communicate
+//also used as a notification publisher, sending unicasted messages to users that need to be informed about something
+//(kicked/accepted etc.)
 public class MulticastPublisher extends Thread {
     private DatagramSocket socket;
-    private ArrayList<Chatroom> chatrooms;
+    //list of all the chatrooms in the application
+    private List<Chatroom> chatrooms;
+    //a multimap that contains the chatroom, and the message that needs to be multicasted to all the members
     private Multimap<Chatroom, Message> pendingChatroomMessages;
-    private ArrayList<User> users;
+    //a list of all the users in the application
+    private List<User> users;
+    //a list of records that contain when was the last time a user typed something (in a particular chatroom)
+    private List<Record> userActivity;
+    //a sort of 'custom latch' made for communication between chatroomActivityChecker thread and MulticastPublisher thread
+    //the Checkers send a multimap key/value pair to the Publisher and then 'locks', waiting for the Publisher to finish with the pair.
+    //When the Publisher finishes with the pair, it sets the latch to 0 and the Checker 'unlocks' and sets the next pair
+    private AtomicInteger latch;
 
+    //constructor
+    public MulticastPublisher(List<Chatroom> chatrooms, Multimap<Chatroom, Message> pendingChatroomMessages, List<User> users, List<Record> userActivity, AtomicInteger latch) {
+        this.chatrooms = chatrooms;
+        this.pendingChatroomMessages = pendingChatroomMessages;
+        this.users = users;
+        this.userActivity = userActivity;
+        this.latch = latch;
+    }
+
+    //takes a certain IP and calculates the next one
+    //takes an IP
+    //returns next IP
     public static String getNextIPV4Address(InetAddress ip) {
         String ipString = ip.getHostAddress();
         String[] nums = ipString.split("\\.");
@@ -32,150 +59,165 @@ public class MulticastPublisher extends Thread {
                 i >> 8 & 0xFF, i >> 0 & 0xFF);
     }
 
+    @Override
     public void run() {
         byte[] buf;
         Chatroom chatroom = null;
         Message message = null;
         //only used for the case of someone getting kicked
         boolean kicked = false;
+        //used in the case of someone asking permission
         boolean permissionAsked = false;
+        //used in the case of someone accepting a permission
         boolean accepted = false;
+        //used in the case of someone deleting a chatroom
+        boolean deleted = false;
+        //used in the case of the server deleting an idle chatroom
+        boolean idle = false;
         while (true) {
             //for some reason, if you remove this, the thread sleeps(?) or something like that and it never checks if the multimap is empty, this is what I call  M A G I C
             this.isAlive();
-            if (!pendingChatroomMessages.isEmpty()) {
-                for (Map.Entry<Chatroom, Message> e : pendingChatroomMessages.entries()) {
-                    InetAddress chatroomMulticastAddress = e.getKey().getMulticastAddress();
-                    //so we don't have a ConcurrentModificationException
-                    Iterator<Chatroom> iter = chatrooms.iterator();
-                    while (iter.hasNext()) {
-                        Chatroom wantedChatroom = iter.next();
-                        //System.out.println(wantedChatroom.getName());
-                        if (wantedChatroom.equals(e.getKey())) {
-                            chatroom = e.getKey();
-                            message = e.getValue();
-                            //in this case, it's not a character but a full message (String) combined with chatroom name
-                            //and sender name
-                            String fullMessage = "";
-                            if (e.getValue().getCharacter().contains("[{[FOR_DELETION]}]|><|")) {
-                                fullMessage = "[{[FOR_DELETION]}]|><|" + e.getKey().getName() + "|><|" + e.getKey().getMulticastAddress().getHostAddress();
-                                iter.remove();
-                            } else if (e.getValue().getCharacter().contains("[{[GOT_KICKED]}]|><|")) {
-                                fullMessage = "[{[GOT_KICKED]}]|><|" + e.getKey().getName() + "|><|" + e.getKey().getMulticastAddress().getHostAddress();
-                                kicked = true;
-                            } else if (e.getValue().getCharacter().contains("[{[PERMISSION_ASKED]}]|><|")) {
-                                fullMessage = "[{[PERMISSION_ASKED]}]|><|" + e.getKey().getName() + "|><|" + e.getValue().getSender().getUsername();
-                                permissionAsked = true;
-                            } else if (e.getValue().getCharacter().contains("[{[PERMISSION_ACCEPTED]}]|><|")) {
-                                fullMessage = "[{[PERMISSION_ACCEPTED]}]|><|" + e.getKey().getName() + "|><|" + e.getKey().getMulticastAddress().getHostAddress();
-                                accepted = true;
-                            } else {
-                                fullMessage = "[" + e.getKey().getName() + "](" + e.getValue().getSender().getUsername() + "): " + e.getValue().getCharacter();
-                            }
-                            buf = fullMessage.getBytes();
-                            if (permissionAsked) {
-                                for (User multicastReceiver : users) {
-                                    if (multicastReceiver.getUsername().toLowerCase().equals(e.getKey().getOwner().getUsername().toLowerCase())) {
-                                        try {
+            //this does nothing (presumably), but the authors decided to leave it as it is in order to show
+            //that effort was taken for thread-safety (more like this existed but it they did not work etc.)
+            synchronized (pendingChatroomMessages) {
+                //if a chatroom message or a notification was added to the map
+                if (!pendingChatroomMessages.isEmpty()) {
+                    //turned this into an iterator because we were deleting at the same time
+                    //but this was throwing a concurrent exception so the .remove() function was dropped but the
+                    //normal iterator remained
+                    Iterator mapIterator = pendingChatroomMessages.entries().iterator();
+                    while (mapIterator.hasNext()) {
+                        Map.Entry<Chatroom, Message> e = (Map.Entry<Chatroom, Message>) mapIterator.next();
+                        InetAddress chatroomMulticastAddress = e.getKey().getMulticastAddress();
+                        //same as the outer synchronization
+                        //"so we don't have a ConcurrentModificationException"
+                        synchronized (chatrooms) {
+                            for (Chatroom wantedChatroom : chatrooms) {
+                                if (wantedChatroom.equals(e.getKey())) {
+                                    chatroom = e.getKey();
+                                    message = e.getValue();
+                                    //in this case, the message is not a single character (like in private chat)
+                                    //but a full message (String) associated with chatroom name and sender name
+                                    String fullMessage = "";
+                                    //unique sequence + chatroom name + multicast ip of chatroom for user to delete
+                                    if (e.getValue().getMessage().contains("[{[FOR_DELETION]}]|><|")) {
+                                        fullMessage = "[{[FOR_DELETION]}]|><|" + e.getKey().getName() + "|><|" + e.getKey().getMulticastAddress().getHostAddress();
+                                        deleted = true;
+                                        //unique sequence + chatroom name + multicast ip of chatroom for user to delete
+                                    } else if (e.getValue().getMessage().contains("[{[FOR_IDLE]}]|><|")) {
+                                        fullMessage = "[{[FOR_IDLE]}]|><|" + e.getKey().getName() + "|><|" + e.getKey().getMulticastAddress().getHostAddress();
+                                        deleted = true;
+                                        idle = true;
+                                        //unique sequence + chatroom name + multicast ip of chatroom for user to delete
+                                    } else if (e.getValue().getMessage().contains("[{[GOT_KICKED]}]|><|")) {
+                                        fullMessage = "[{[GOT_KICKED]}]|><|" + e.getKey().getName() + "|><|" + e.getKey().getMulticastAddress().getHostAddress();
+                                        kicked = true;
+                                        //unique sequence + chatroom name + username of the person who asked for permission
+                                    } else if (e.getValue().getMessage().contains("[{[PERMISSION_ASKED]}]|><|")) {
+                                        fullMessage = "[{[PERMISSION_ASKED]}]|><|" + e.getKey().getName() + "|><|" + e.getValue().getSender().getUsername();
+                                        permissionAsked = true;
+                                        //unique sequence + chatroom name + multicast ip of chatroom for user to add to their chatrooms
+                                    } else if (e.getValue().getMessage().contains("[{[PERMISSION_ACCEPTED]}]|><|")) {
+                                        fullMessage = "[{[PERMISSION_ACCEPTED]}]|><|" + e.getKey().getName() + "|><|" + e.getKey().getMulticastAddress().getHostAddress();
+                                        accepted = true;
+                                    } else {
+                                        fullMessage = "[" + e.getKey().getName() + "](" + e.getValue().getSender().getUsername() + "): " + e.getValue().getMessage();
+                                    }
+                                    //get the message and put it into a package
+                                    buf = fullMessage.getBytes();
+                                    //what pathway condition will be chosen, depends on the boolean that accompanied
+                                    //the unique sequences, for example for deletion, we also delete the
+                                    //chatroom from the chatrooms list
+                                    if (permissionAsked) {
+                                        for (User multicastReceiver : users) {
+                                            if (multicastReceiver.getUsername().toLowerCase().equals(e.getKey().getOwner().getUsername().toLowerCase())) {
+                                                try {
+                                                    DatagramPacket packet
+                                                            = new DatagramPacket(buf, buf.length, chatroomMulticastAddress, multicastReceiver.getMulticastPort());
+                                                    socket = new DatagramSocket();
+                                                    socket.send(packet);
+                                                    socket.close();
+                                                } catch (IOException ex) {
+                                                    ex.printStackTrace();
+                                                }
+                                                wantedChatroom.getUsers().remove(message.getSender());
+                                                permissionAsked = false;
+                                                break;
+                                            }
+                                        }
+                                    } else if (accepted) {
+                                        for (User multicastReceiver : users) {
+                                            if (multicastReceiver.equals(e.getValue().getSender())) {
+                                                try {
+                                                    DatagramPacket packet
+                                                            = new DatagramPacket(buf, buf.length, InetAddress.getByName("239.0.0.0"), multicastReceiver.getMulticastPort());
+                                                    accepted = false;
+                                                    socket = new DatagramSocket();
+                                                    socket.send(packet);
+                                                    socket.close();
+                                                } catch (IOException ex) {
+                                                    ex.printStackTrace();
+                                                }
+                                                wantedChatroom.getUsers().remove(message.getSender());
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    //turning the multicast feature into a unicast one by only sending the packet to the kicked user in order to notify him
+                                    else if (kicked) {
+                                        for (User multicastReceiver : wantedChatroom.getUsers()) {
+                                            if (multicastReceiver.equals(e.getValue().getSender())) {
+                                                DatagramPacket packet
+                                                        = new DatagramPacket(buf, buf.length, chatroomMulticastAddress, multicastReceiver.getMulticastPort());
+                                                try {
+                                                    socket = new DatagramSocket();
+                                                    socket.send(packet);
+                                                    socket.close();
+                                                } catch (IOException ex) {
+                                                    ex.printStackTrace();
+                                                }
+                                                wantedChatroom.getUsers().remove(message.getSender());
+                                                kicked = false;
+                                                break;
+                                            }
+                                        }
+                                        //if chatroom needs to be deleted
+                                    } else {
+                                        for (User multicastReceiver : wantedChatroom.getUsers()) {
                                             DatagramPacket packet
                                                     = new DatagramPacket(buf, buf.length, chatroomMulticastAddress, multicastReceiver.getMulticastPort());
-                                            socket = new DatagramSocket();
-                                            socket.send(packet);
-                                            socket.close();
-                                        } catch (IOException ex) {
-                                            ex.printStackTrace();
+                                            try {
+                                                socket = new DatagramSocket();
+                                                socket.send(packet);
+                                                socket.close();
+                                            } catch (IOException ex) {
+                                                ex.printStackTrace();
+                                            }
                                         }
-                                        wantedChatroom.getUsers().remove(message.getSender());
-                                        permissionAsked = false;
-                                        break;
                                     }
-                                }
-                            } else if (accepted) {
-                                for (User multicastReceiver : users) {
-                                    if (multicastReceiver.equals(e.getValue().getSender())) {
-                                        try {
-                                            DatagramPacket packet
-                                                    = new DatagramPacket(buf, buf.length, InetAddress.getByName("239.0.0.0"), multicastReceiver.getMulticastPort());
-                                            accepted = false;
-                                            socket = new DatagramSocket();
-                                            socket.send(packet);
-                                            socket.close();
-                                        } catch (IOException ex) {
-                                            ex.printStackTrace();
-                                        }
-                                        wantedChatroom.getUsers().remove(message.getSender());
-                                        permissionAsked = false;
-                                        break;
-                                    }
+                                    break;
                                 }
                             }
-                            //turning the multicast feature into a unicast one by only sending the packet to the kicked user only in order to notify him
-                            else if (kicked) {
-                                for (User multicastReceiver : wantedChatroom.getUsers()) {
-                                    //System.out.println("oops ;)" + multicastReceiver.getUsername());
-                                    if (multicastReceiver.equals(e.getValue().getSender())) {
-                                        //System.out.println("getting closer D:" + multicastReceiver.getUsername() + multicastReceiver.getMulticastPort());
-                                        DatagramPacket packet
-                                                = new DatagramPacket(buf, buf.length, chatroomMulticastAddress, multicastReceiver.getMulticastPort());
-                                        try {
-                                            socket = new DatagramSocket();
-                                            socket.send(packet);
-                                            socket.close();
-                                        } catch (IOException ex) {
-                                            ex.printStackTrace();
-                                        }
-                                        wantedChatroom.getUsers().remove(message.getSender());
-                                        kicked = false;
-                                        break;
-                                    }
-                                }
-                            } else {
-                                for (User multicastReceiver : wantedChatroom.getUsers()) {
-                                    DatagramPacket packet
-                                            = new DatagramPacket(buf, buf.length, chatroomMulticastAddress, multicastReceiver.getMulticastPort());
-                                    try {
-                                        socket = new DatagramSocket();
-                                        socket.send(packet);
-                                        socket.close();
-                                    } catch (IOException ex) {
-                                        ex.printStackTrace();
-                                    }
-                                }
-                            }
-                            //iter.remove();
-                            break;
                         }
                     }
-                }
-                if (chatroom != null && message != null) {
-                    pendingChatroomMessages.remove(chatroom, message);
-                    System.out.println("A message was multicasted.");
+                    if (chatroom != null && message != null) {
+                        pendingChatroomMessages.remove(chatroom, message);
+                        if (deleted) {
+                            if (idle) {
+                                //allow the other thread (chatroomActivityChecker) to send a new deletion request
+                                //this makes concurrent modification of the multimap data structure less frequent
+                                latch.set(0);
+                            }
+                            deleted = false;
+                            chatrooms.remove(chatroom);
+                            //reset the chatroom
+                            chatroom = null;
+                        }
+                        //or unicasted, depends on the condition chosen by the application
+                        System.out.println("A message was multicasted.");
+                    }
                 }
             }
         }
-    }
-
-    public ArrayList<User> getUsers() {
-        return users;
-    }
-
-    public void setUsers(ArrayList<User> users) {
-        this.users = users;
-    }
-
-    public Multimap<Chatroom, Message> getPendingChatroomMessages() {
-        return pendingChatroomMessages;
-    }
-
-    public void setPendingChatroomMessages(Multimap<Chatroom, Message> pendingChatroomMessages) {
-        this.pendingChatroomMessages = pendingChatroomMessages;
-    }
-
-    public ArrayList<Chatroom> getChatrooms() {
-        return chatrooms;
-    }
-
-    public void setChatrooms(ArrayList<Chatroom> chatrooms) {
-        this.chatrooms = chatrooms;
     }
 }

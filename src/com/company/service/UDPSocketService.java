@@ -1,24 +1,13 @@
 package com.company.service;
 
-import java.io.*;
-import java.net.DatagramPacket;
-import java.net.InetAddress;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 
+//mainly used as a service that serves TCP functionalities
 public class UDPSocketService {
-
-    //mainly used by the server to answer to questions:
-    //converts an object to a byte array, allowing a socket to send it to a receiver
-    //requires an Object, this could be a String
-    //returns a byte array
-    public static byte[] convertObjectToByteArray(Object o) throws IOException {
-        ByteArrayOutputStream bStream = new ByteArrayOutputStream();
-        ObjectOutput oo = new ObjectOutputStream(bStream);
-        oo.writeObject(o);
-        oo.close();
-        byte[] serializedObject = bStream.toByteArray();
-        return serializedObject;
-    }
 
     //similar to the above method
     //this allows the "reader" to distinguish between objects, say for example you want to distinguish in a packet
@@ -45,23 +34,17 @@ public class UDPSocketService {
         return buf;
     }
 
-    //------------------------------------------OLD METHODS------------------------------------------------//
-
-
-    //used in the old files, no longer needed in the newer version
-    public static DatagramPacket quickConfirmationPacket(String message, InetAddress addressTo, int port) {
-        byte[] messageByteArray = message.getBytes();
-        DatagramPacket datagramPacket = new DatagramPacket(messageByteArray, messageByteArray.length,
-                addressTo, port);
-        return datagramPacket;
-    }
-
-    public static Serializable[] convertByteArrayToObject(byte[] array) throws IOException, ClassNotFoundException {
-        ObjectInputStream iStream = new ObjectInputStream(new ByteArrayInputStream(array));
-        Serializable[] indexedObject = new Serializable[2];
-        indexedObject[0] = iStream.readInt();
-        indexedObject[1] = (Serializable) iStream.readObject();
-        iStream.close();
-        return indexedObject;
+    //mainly used by the server to answer to questions:
+    //converts an object to a byte array, allowing a socket to send it to a receiver
+    //requires an Object, this could be a String
+    //returns a byte array
+    //NOTICE: UNUSED because of all functionalties moving to TCP
+    public static byte[] convertObjectToByteArray(Object o) throws IOException {
+        ByteArrayOutputStream bStream = new ByteArrayOutputStream();
+        ObjectOutput oo = new ObjectOutputStream(bStream);
+        oo.writeObject(o);
+        oo.close();
+        byte[] serializedObject = bStream.toByteArray();
+        return serializedObject;
     }
 }

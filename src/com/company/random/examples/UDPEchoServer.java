@@ -16,7 +16,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 
 public class UDPEchoServer {
-    public static void main(String argv[]) throws Exception {
+    public static void main(String[] argv) throws Exception {
         String capitalizedSentence = null;
         int port = 4567;
         int maxLength = 255;

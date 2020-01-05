@@ -13,7 +13,7 @@ import java.io.PrintStream;
 import java.net.Socket;
 
 class TCPEchoClient {
-    public static void main(String argv[]) throws Exception {
+    public static void main(String[] argv) throws Exception {
         String sentence = null, modifiedSentence = null, serverMachine;
         int port;
 

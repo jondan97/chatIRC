@@ -15,7 +15,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 class TCPEchoServer {
-    public static void main(String argv[]) throws Exception {
+    public static void main(String[] argv) throws Exception {
         String clientSentence, capitalizedSentence;
         int port;
         Socket connectionSocket = null;

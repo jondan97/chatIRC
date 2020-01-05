@@ -35,11 +35,11 @@ public class PrivateChatListener extends Thread {
                     Message msg = (Message) TCPSocketService.receiveObject(tcpSocket);
                     if (!messages.containsKey(msg.getSender())) {
                         //System.out.println("sender added");
-                        messages.put(msg.getSender(), msg.getCharacter().toString());
+                        messages.put(msg.getSender(), msg.getMessage());
                     } else if (messages.containsKey(msg.getSender())) {
                         if (msg.getKeyValue() != 13) {
                             //System.out.println("letter added.");
-                            messages.replace(msg.getSender(), messages.get(msg.getSender()) + msg.getCharacter());
+                            messages.replace(msg.getSender(), messages.get(msg.getSender()) + msg.getMessage());
                         } else if (msg.getKeyValue() == 13) {
                             userInput.ready();
                             //System.out.println("message sent");
@@ -57,7 +57,7 @@ public class PrivateChatListener extends Thread {
                         System.out.println();
                         showSender = true;
                     } else {
-                        System.out.print(msg.getCharacter());
+                        System.out.print(msg.getMessage());
                     }
                 }
             }

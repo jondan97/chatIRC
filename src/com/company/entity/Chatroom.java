@@ -2,6 +2,7 @@ package com.company.entity;
 
 import java.io.Serializable;
 import java.net.InetAddress;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Objects;
 
@@ -14,16 +15,18 @@ public class Chatroom implements Serializable {
     String password;
     //list of users that belong in this chatroom
     ArrayList<User> users;
-    //set by the owner
+    //set by the owner, basically a threshold for how long a user can be idle for
     int kickTime;
-    //set by the server admin (who is going to be distinguished by a unique name)
-    int deletionTime;
+    //last time this chatroom was active, gets updated every time a member sends something
+    LocalDateTime lastActive;
     //        224.0.1.0 	238.255.255.255 	Globally scoped (Internet-wide) multicast address
     //        239.0.0.0 	239.255.255.255 	Administratively scoped (local) multicast addresses
+    //multicast address used for this chatroom (the one the members listen to for this chatroom)
     InetAddress multicastAddress;
 
     //default constructor, only need to declare the array list
     public Chatroom() {
+        lastActive = LocalDateTime.now();
         users = new ArrayList<>();
     }
 
@@ -77,12 +80,12 @@ public class Chatroom implements Serializable {
         this.kickTime = kickTime;
     }
 
-    public int getDeletionTime() {
-        return deletionTime;
+    public LocalDateTime getLastActive() {
+        return lastActive;
     }
 
-    public void setDeletionTime(int deletionTime) {
-        this.deletionTime = deletionTime;
+    public void setLastActive(LocalDateTime lastActive) {
+        this.lastActive = lastActive;
     }
 
     public InetAddress getMulticastAddress() {
@@ -124,6 +127,7 @@ public class Chatroom implements Serializable {
                 getName().toLowerCase().equals(chatroom.getName().toLowerCase());
     }
 
+    //good to have, but not needed in our case
     @Override
     public int hashCode() {
         return Objects.hash(getOwner(), getName());

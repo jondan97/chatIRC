@@ -20,7 +20,7 @@ public class UDPEchoClient {
         String lineToServer, lineFromServer;
 
         /* First argument is the running server's name */
-        hostname = new String("john-pc");
+        hostname = "john-pc";
 
         /* Second argument is the port in which the server accepts connections */
         port = Integer.parseInt("4567");

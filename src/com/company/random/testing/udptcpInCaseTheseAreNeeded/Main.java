@@ -8,6 +8,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -83,7 +84,7 @@ public class Main {
                     while (true) {
                         socket.receive(packet);
                         System.out.println(packet.getSocketAddress().toString()
-                                + ": " + new String(buf, "UTF-8"));
+                                + ": " + new String(buf, StandardCharsets.UTF_8));
                         // Echo server
                         socket.send(packet);
                     }

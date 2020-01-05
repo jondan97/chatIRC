@@ -7,10 +7,10 @@ import java.util.Objects;
 public class User implements Serializable {
 
     private String username;
-    //role could be either admin or normal user, might never be implemented
-    private String role;
     //details include IP address etc.
     private InetAddress details;
+    //this allows the server to know which port the UDP socket (on the client-side) listens to, this information is
+    //intially transferred during the /isUserRegistered command
     private int multicastPort;
 
     //constructor that requires username and details
@@ -31,24 +31,9 @@ public class User implements Serializable {
         return username;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
 
     public InetAddress getDetails() {
         return details;
-    }
-
-    public void setDetails(InetAddress details) {
-        this.details = details;
     }
 
     public int getMulticastPort() {
@@ -60,7 +45,7 @@ public class User implements Serializable {
     }
 
     //the authors believe that Username and Details are enough to distinguish between Users
-    //username is unique but details are needed to order to create a somewhat "session"
+    //username is unique but details are needed in order to create a somewhat "session" when connected to the server or
     //each time a user requests something
     @Override
     public boolean equals(Object o) {

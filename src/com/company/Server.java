@@ -1,27 +1,28 @@
 package com.company;
 
+import com.company.checker.ChatroomActivityChecker;
+import com.company.checker.UserActivityChecker;
 import com.company.entity.Chatroom;
 import com.company.entity.Message;
+import com.company.entity.Record;
 import com.company.entity.User;
 import com.company.thread.MulticastPublisher;
 import com.company.thread.TCPThread;
 import com.company.thread.UDPThread;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
 
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Server {
-//    static Multimap<Chatroom, Message> pendingChatroomMessages = ArrayListMultimap.create();
-//    static ArrayList<Chatroom> chatrooms = new ArrayList<>();
 
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         try {
             //port that the server will run on, it is auto-configured below
             int port;
@@ -45,17 +46,14 @@ public class Server {
                 }
             }
 
-            //allows us to know the server's IP
+            //allows us to know the server's IP so we can show it on the console, then have clients connect to it
             InetAddress thisMachine = null;
             try {
                 thisMachine = InetAddress.getLocalHost();
             } catch (UnknownHostException e) {
                 e.printStackTrace();
             }
-
             System.out.println("Server's IP Address is: " + thisMachine.getHostAddress() + "\n");
-
-
 
 
             // The port we'll listen on
@@ -64,23 +62,6 @@ public class Server {
             // Create and bind a tcp channel to listen for connections on.
             ServerSocketChannel tcpServer = ServerSocketChannel.open();
             tcpServer.socket().bind(localport);
-
-//            int chattingPort;
-//            for (chattingPort = startPort; chattingPort <= stopPort; chattingPort += 1) {
-//                try {
-//                    System.out.println("Searching for a free port to start server on....");
-//                    DatagramSocket datagramSocket = new DatagramSocket(chattingPort);
-//                    System.out.println("Started server on port: " + chattingPort);
-//                    datagramSocket.close();
-//                    break;
-//                } catch (IOException e) {
-//                }
-//            }
-            // The port we'll listen on
-//            SocketAddress localChattingPort = new InetSocketAddress(5678);
-//            ServerSocketChannel tcpServerChat = ServerSocketChannel.open();
-//            tcpServerChat.socket().bind(localChattingPort);
-
 
             // Also create and bind a DatagramChannel to listen on.
             DatagramChannel udpServer = DatagramChannel.open();
@@ -100,25 +81,55 @@ public class Server {
             // to read) we'd like the Selector to wake up for.
             tcpServer.register(selector, SelectionKey.OP_ACCEPT);
             udpServer.register(selector, SelectionKey.OP_READ);
+
+            //-----------------------------------------
+            //we are turning the following data structures into synchronized lists so that we can do operations such as add and remove
+            // when multiple threads are using them
+            //-----------------------------------------
+
             //all the users of the chat application
-            ArrayList<User> users = new ArrayList<>();
-            //test user
-            users.add(new User("ska"));
-            //-----------------------------------------
-            Multimap<User, Message> pendingChatMessages = ArrayListMultimap.create();
-            Multimap<Chatroom, Message> pendingChatroomMessages = ArrayListMultimap.create();
-            ArrayList<Chatroom> chatrooms = new ArrayList<>();
-            MulticastPublisher chatroomMessagePublisher = new MulticastPublisher();
-            //all the chatrooms of the application
-            chatroomMessagePublisher.setChatrooms(chatrooms);
-            chatroomMessagePublisher.setPendingChatroomMessages(pendingChatroomMessages);
-            chatroomMessagePublisher.setUsers(users);
-            //pendingChatroomMessages.put(new Chatroom(), new Message("ESKETIT", new User("ska")));
+            ArrayList<User> usersUnsynced = new ArrayList<>();
+            List<User> users = Collections.synchronizedList(usersUnsynced);
+
+            //all pending (private) messages that the application receives from the user
+            //key is the user that it is meant for, and value is the message that contains the String sentence and the user who sent it (sender)
+            //requires google collections/guava library
+            Multimap<User, Message> pendingChatMessagesUnsynced = ArrayListMultimap.create();
+            Multimap<User, Message> pendingChatMessages = Multimaps.synchronizedMultimap(pendingChatMessagesUnsynced);
+
+            //similarly to the above, this concerns all the chatroom messages from users
+            //key is the chatroom it concerns, and value is the message that contains String sentence and the sender
+            Multimap<Chatroom, Message> pendingChatroomMessagesUnsynced = ArrayListMultimap.create();
+            Multimap<Chatroom, Message> pendingChatroomMessages = Multimaps.synchronizedMultimap(pendingChatroomMessagesUnsynced);
+
+            //all the chatrooms/groups of the application
+            ArrayList<Chatroom> chatroomsUnsynced = new ArrayList<>();
+            List<Chatroom> chatrooms = Collections.synchronizedList(chatroomsUnsynced);
+
+            //a set of "records" that contain the active of each user (when was the last time they sent a message in a particular chatroom)
+            ArrayList<Record> userActivityUnsynced = new ArrayList<>();
+            List<Record> userActivity = Collections.synchronizedList(userActivityUnsynced);
+
+            //a sort of 'custom latch' made for communication between chatroomActivityChecker thread and MulticastPublisher
+            //the Checkers send a multimap key/value pair to the Publisher and then 'locks', waiting for the Publisher to finish with the pair.
+            //When the Publisher finishes with the pair, it sets the latch to 0 and the Checker 'unlocks' and sets the next pair
+            AtomicInteger latch = new AtomicInteger(0);
+
+            //main thread that handles all the multicast messages, mainly handling group messages and notifications to users
+            MulticastPublisher chatroomMessagePublisher = new MulticastPublisher(chatrooms, pendingChatroomMessages, users, userActivity, latch);
             chatroomMessagePublisher.start();
+
+            //main thread that concerns user activity, checks for expired records and manages/kicks users that have not messaged in a chat for a threshold
+            UserActivityChecker userActivityChecker = new UserActivityChecker(userActivity, chatrooms, pendingChatroomMessages);
+            userActivityChecker.start();
+
+            //similarly to the userActivityChecker, this main thread handles chatrooms that are inactive, all inactive chatrooms are deleted
+            ChatroomActivityChecker chatroomActivityChecker = new ChatroomActivityChecker(chatrooms, pendingChatroomMessages, latch);
+            chatroomActivityChecker.start();
             //-----------------------------------------
 
 
-            //maximum length of received/sent packets
+            //maximum length of received/sent UDP packets
             int datagramPacketMaxLength = 3500;
             // Now loop forever, processing client connections
             while (true) {
@@ -143,19 +154,10 @@ public class Server {
                         //System.out.println(c.toString() + " (channel)");
 
                         // Now test the key and the channel to find out
-                        // whether something happend on the TCP or UDP channel
+                        // whether something happened on the TCP or UDP channel
                         if (key.isAcceptable() && c == tcpServer) {
-                            Chatroom chatroom = new Chatroom();
-                            chatroom.setName("mc");
-                            chatroom.setPolicy("2");
-                            chatroom.setPassword("cM");
-                            chatroom.setOwner(new User("adolfos", InetAddress.getByName("192.168.1.13")));
-                            chatroom.setMulticastAddress(InetAddress.getByName("239.0.0.1"));
-                            if (!chatrooms.contains(chatroom)) {
-                                chatrooms.add(chatroom);
-                            }
-
-                            new TCPThread(tcpServer.accept(), users, chatrooms, pendingChatMessages, pendingChatroomMessages).start();
+                            //new TCP request accepted and a new thread that will handle the client connection is accepted
+                            new TCPThread(tcpServer.accept(), users, chatrooms, pendingChatMessages, pendingChatroomMessages, userActivity, chatroomActivityChecker).start();
                         } else if (key.isReadable() && c == udpServer) {
                             //if we don't declare the buffer inside the loop, then in the next iteration of the while loop,
                             //the buffer contents will be lost and the active thread will be left with a null instance,

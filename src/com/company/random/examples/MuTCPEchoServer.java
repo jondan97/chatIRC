@@ -20,7 +20,7 @@ public class MuTCPEchoServer {
         serverPort = port;
     }  /* End Contrucotr Method */
 
-    public static void main(String argv[]) throws Exception {
+    public static void main(String[] argv) throws Exception {
         /* The port the server is listening on */
         int port;
 

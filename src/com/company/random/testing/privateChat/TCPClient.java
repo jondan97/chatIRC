@@ -9,7 +9,7 @@ import java.net.Socket;
 import java.util.Scanner;
 
 class TCPClient {
-    public static void main(String argv[]) throws Exception {
+    public static void main(String[] argv) throws Exception {
         String input;
         Socket server = new Socket("192.168.1.13", 1);
         Chatroom chatroom = new Chatroom();
@@ -17,7 +17,7 @@ class TCPClient {
         chatroom.setName("XAAXXAXAXAXAAXXAXAAXAX");
         chatroom.setPolicy("3");
         chatroom.setKickTime(4);
-        chatroom.setDeletionTime(56);
+        //chatroom.setDeletionTime(56);
         chatroom.setPassword("xdDD");
         TCPSocketService.sendObject(chatroom, server);
         Chatroom returnMessage = (Chatroom) TCPSocketService.receiveObject(server);

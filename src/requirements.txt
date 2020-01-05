@@ -15,5 +15,5 @@
 - A user can chat privately with another user (DONE) (TCP)
 - A user can participate in multiple private chats (DONE) (TCP)
 - In a private chat, a user can see live in real-time the keystrokes of the other user (DONE) (TCP)
-- If a group member is not writing anything for more time than a threshold (set by the group creator), he is automatically kicked out of the group
-- If no group member is writing anything for more time than a threshold (set by the server administrator), the group is automatically deleted
+- If a group member is not writing anything for more time than a threshold (set by the group creator), he is automatically kicked out of the group (DONE) (TCP)+(MULTICAST)
+- If no group member is writing anything for more time than a threshold (set by the server administrator), the group is automatically deleted (DONE) (TCP)+(MULTICAST)

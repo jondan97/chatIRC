@@ -3,10 +3,10 @@ package com.company;
 import com.company.entity.Chatroom;
 import com.company.entity.Message;
 import com.company.entity.User;
+import com.company.listener.MulticastListener;
 import com.company.listener.PrivateChatListener;
 import com.company.service.TCPSocketService;
 import com.company.service.UDPSocketService;
-import com.company.thread.MulticastReceiver;
 import lc.kra.system.keyboard.GlobalKeyboardHook;
 import lc.kra.system.keyboard.event.GlobalKeyAdapter;
 import lc.kra.system.keyboard.event.GlobalKeyEvent;
@@ -17,20 +17,13 @@ import java.io.InputStreamReader;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 public class Client {
     //used for keystrokes
     private static boolean run = false;
 
     public static void main(String[] args) throws IOException {
-        String help = "" +
-                "/showAllUsers - Shows all users currently registered on the server. \n" +
-                "/showAllChatrooms - Shows all chatrooms that currently exist on  the server \n" +
-                "/createChatroom - Creates a new chatroom \n" +
-                "/deleteChatroom - Deletes an existing chatroom (provided you are the owner) \n" +
-                "/help - Shows all available commands again. \n" +
-                "/exit - Exits the application. \n";
-        System.out.println(help);
 
         //server IP
         String ipString = "192.168.1.13";
@@ -39,7 +32,7 @@ public class Client {
         int startPort = 1;
         int stopPort = 65535;
         //port for receiving group messages
-        int multicastPort = 1;
+        int multicastPort;
 
         //in case the user wants to change IP/Port without editing the Java files
         if (args.length > 0) {
@@ -60,6 +53,24 @@ public class Client {
         }
         InetAddress serverAddr = InetAddress.getByName(ipString);
 
+        String help = "\n" +
+                "/showAllUsers - Shows all users currently registered on the server. \n" +
+                "/showAllChatrooms - Shows all chatrooms that currently exist on  the server. \n" +
+                "/createChatroom - Creates a new chatroom. \n" +
+                "/deleteChatroom - Deletes an existing chatroom (Provided you are the owner). \n" +
+                "/whisper - Send a message to someone in private. \n" +
+                "/chatroom - Send a message to a chatroom. All other users that belong to the group will be able to read it. \n" +
+                "/createChatroom - Create a new chatroom for messaging with multiple users. \n" +
+                "/chatroomDeletionAdmin - Set the Universal Deletion Time (Reserved for admins). \n" +
+                "/joinChatroom - Join an already existing chatroom and send and read messages from other users. \n" +
+                "/kickFromChatroom - Kick a user out of a chatroom (Provided you are the owner). \n" +
+                "/delegateChatroomOwnership - Delegate the ownership of a chatroom to another user (Provided you are the owner). \n" +
+                "/permissions - Check for notifications concerning users that want to join one of your prohibited chatrooms. \n" +
+                "/keystrokes - Gives the ability to see live in real-time the keystrokes of the other user (Support for one user only)  \n" +
+                "/help - Shows all available commands again. \n" +
+                "/exit - Exits the application. \n";
+        System.out.println(help);
+
         //maximum length of received/sent packets
         int datagramPacketMaxLength = 3500;
         //username of current client, can be received from server (if already registered)
@@ -72,13 +83,14 @@ public class Client {
             //first we check if the server is up through UDP
             String checkAvailability = "/availability";
             //Question asked in form of a String (usually)
+            //NOTICE: UDP most functionalities have changed to TCP now, so this UDP design is "overkill" but left none-the-less
             byte[] question;
             question = UDPSocketService.convertDistinguishableObjectToByteArray(5, checkAvailability);
             DatagramPacket testPacketToServer = new DatagramPacket(question, question.length, serverAddr, port);
             DatagramSocket UDPsocket = new DatagramSocket();
             UDPsocket.send(testPacketToServer);
             //then we get the answer, if we receive a message that says "true", then ping success
-            //if we receive anything else ("false" in that case) warn that the connection might be weak
+            //if we receive anything else ("false" in the 'perfect' case) warn that the connection might be weak
             //this happens because we might have received a corrupted packet
             byte[] answer = new byte[datagramPacketMaxLength];
             DatagramPacket answerFromServer = new DatagramPacket(answer, datagramPacketMaxLength);
@@ -93,17 +105,27 @@ public class Client {
                 System.out.println("Pinged server but connection may be weak.");
             }
 
-            MulticastReceiver chatroomListener = new MulticastReceiver();
-            chatroomListener.setMulticastPort(multicastPort);
-            ArrayList<Message> permissions = new ArrayList<>();
-            chatroomListener.setPermissions(permissions);
+            //the main buffered reader, needs to be passed in other classes so that they also know,
+            //when the user is actually typing and when the user is ready to see new messages
+            //this application works in CMD, so there is no GUI and all messages are displayed in one line
+            //by passing this to other classes, the classes that also print to the screen need to know
+            //when the user is not typing anything and ready to see new notifications
             BufferedReader userInput = new BufferedReader(new InputStreamReader(System.in));
-            chatroomListener.setUserInput(userInput);
+
+            //for all the users that requested to join a chatroom, the client will receive them one by one through multicasting
+            //and then will be able to accept or deny requests/permissions
+            List<Message> permissions = new ArrayList<>();
+
+            //chatroom listener, the main thread listens for all the UDP multicasts, receives messages and prints them
+            MulticastListener chatroomListener = new MulticastListener(multicastPort, permissions, userInput, datagramPacketMaxLength);
             chatroomListener.start();
 
 
+            //first TCP request to the server, if user is registered then the client takes the username that was already saved in the server
+            //and saves it as his
+            //if user is not registered, then he is prompted to enter a unique username and register with it
             String isUserRegistered = "/isUserRegistered";
-            User thisClient = null;
+            User thisClient;
             Socket tcpSocket = new Socket(ipString, port);
             TCPSocketService.sendObject(isUserRegistered, tcpSocket);
             boolean userIsRegistered = (boolean) TCPSocketService.receiveObject(tcpSocket);
@@ -132,12 +154,14 @@ public class Client {
 
             //NOTE TO LECTURERS: TURN TO FALSE IF THIS DOESN'T WORK OR REMOVE THIS COMPLETELY
             // Use false here to switch to hook instead of raw input (for the terminal)
+            //key listener than records all the keys pressed by the client
+            //once again, this is CMD so no support was found, and therefore a external library was needed called
+            //'system-hook' for this to work
             GlobalKeyboardHook keyboardHook = new GlobalKeyboardHook(true);
             keyboardHook.addKeyListener(new GlobalKeyAdapter() {
                 @Override
                 public void keyPressed(GlobalKeyEvent event) {
                     try {
-
                         if (run == true) {
                             String keyChar = String.valueOf(event.getKeyChar());
                             TCPSocketService.sendObject(keyChar, tcpSocket);
@@ -151,19 +175,23 @@ public class Client {
                     }
                 }
             });
-            //keyboardHook.removeKeyListener();
-            //run = false;
 
             //the user can now interact with the server in many ways, mainly with the help of the
             //existing commands
             String userInputSentToServer;
+            //private chat listener, this class listens for all the private messages sent to the user (see /chattingPort in the server side for more info)
+            //another connection made to the with the server, the other connection handles requests such as 'show all users' whereas this one listens for
+            //messages
             PrivateChatListener chat = new PrivateChatListener(ipString, port, userInput);
             chat.start();
 
+            //more info about the requests can be found in the server-side of this application
             while (true) {
+                //always checks at the beginning if there are new permissions
                 if (!permissions.isEmpty()) {
                     System.out.println("You have [" + permissions.size() + "] users asking for permission to join a group of yours.");
                 }
+                //waiting for input
                 System.out.println("Type text to send to the server: ");
                 userInputSentToServer = userInput.readLine();
                 //user input is always lowercase, commands could be written any way
@@ -176,8 +204,11 @@ public class Client {
                     System.out.println("Disconnected from server.");
                     tcpSocket.close();
                     break;
+                    //this makes the buffered reader ready, so it allows other classes to send any notifications they might have
                 } else if (userInputSentToServer.equals("/refresh")) {
                     continue;
+                    //for chatting in a group/chatroom
+                    //the client is prompted to enter the chatroom name, if it exists and he is a member of it, he can proceed with sending a message
                 } else if (userInputSentToServer.equals("/chatroom")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
@@ -208,46 +239,52 @@ public class Client {
                 //so any more checking is unnecessary (this is checked in other parts of the code for example 'joinchatroom')
                 else if (userInputSentToServer.equals("/permissions")) {
                     Iterator<Message> iter = permissions.iterator();
+                    //normal iterator used here so we can also remove an element
                     while (iter.hasNext()) {
                         Message message = iter.next();
-                        //basically asking the server the same thing
+                        //basically asking the server the same thing (this allows the server-client to be in a synced loop)
                         userInputSentToServer = "/permissions";
                         TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
-                        System.out.println("'" + message.getSender().getUsername() + "' requested to join [" + message.getCharacter() + "]. [y/n]?");
+                        System.out.println("'" + message.getSender().getUsername() + "' requested to join [" + message.getMessage() + "]. [y/n]?");
                         userInputSentToServer = userInput.readLine();
                         TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                         if (userInputSentToServer.equals("y")) {
                             TCPSocketService.sendObject(message.getSender().getUsername(), tcpSocket);
-                            TCPSocketService.sendObject(message.getCharacter(), tcpSocket);
+                            TCPSocketService.sendObject(message.getMessage(), tcpSocket);
                             System.out.println("User has now joined your chatroom.");
                         } else if (userInputSentToServer.equals("n")) {
                             System.out.println("User denied.");
                         }
                         iter.remove();
                     }
-                } else if (userInputSentToServer.equals("/chatoff")) {
-                    if (chat.isAlive()) {
-                        chat.wait();
-                        System.out.println("No longer receiving notifications from other users.");
+                }
+                //reserved only for the admin
+                else if (userInputSentToServer.equals("/chatroomdeletiontime")) {
+                    TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
+                    System.out.println("What is the new chatroom deletion time?");
+                    userInputSentToServer = userInput.readLine();
+                    int universalChatroomDeletionTime = Integer.parseInt(userInputSentToServer);
+                    TCPSocketService.sendObject(universalChatroomDeletionTime, tcpSocket);
+                    System.out.println("New time is set. (If you are the admin)");
+                    //this enables/disables keystrokes,
+                    //when enabled, the client will received the keystrokes of other users in real time
+                    //when disabled, the torture is also stopped
+                } else if (userInputSentToServer.equals("/keystrokes")) {
+                    if (chat.isShowKeystrokes()) {
+                        chat.setShowKeystrokes(false);
+                        System.out.println("You can no longer see what other users type to you.");
+                    } else if (!chat.isShowKeystrokes()) {
+                        chat.setShowKeystrokes(true);
+                        //supports only one person typing at the same time
+                        //since the application has no GUI and it uses the command line
+                        System.out.println("You can now see all the characters typed to you.");
                     }
-                } else if (userInputSentToServer.equals("/chaton")) {
-                    if (!chat.isAlive()) {
-                        chat.notify();
-                        System.out.println("Other users can now message you.");
-                    }
-                } else if (userInputSentToServer.equals("/keystrokeson")) {
-                    //keyboardHook.notify();
-                    chat.setShowKeystrokes(true);
-                    //supports only one person typing at the same time
-                    System.out.println("You can now see all the characters typed to you.");
-                } else if (userInputSentToServer.equals("/keystrokesoff")) {
-                    //keyboardHook.wait();
-                    chat.setShowKeystrokes(false);
-                    System.out.println("You can no longer see what other users type to you.");
+                    //in case the client wants to whisper someone privately
+                    //the name of the user is asked first, if he exists then the message is asked afterwards
                 } else if (userInputSentToServer.equals("/whisper")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
-                        System.out.println("What is the name of the user you want to chat with?");
+                        System.out.println("What is the name of the user you want to send a private message to?");
                         userInputSentToServer = userInput.readLine();
                         TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                         User wantedUser = (User) TCPSocketService.receiveObject(tcpSocket);
@@ -262,10 +299,11 @@ public class Client {
                             continue;
                         }
                     }
+                    //shows all chatrooms that exist on the server
                 } else if (userInputSentToServer.equals("/showallchatrooms")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     try {
-                        ArrayList<Chatroom> chatrooms = (ArrayList<Chatroom>) TCPSocketService.receiveObject(tcpSocket);
+                        List<Chatroom> chatrooms = (List<Chatroom>) TCPSocketService.receiveObject(tcpSocket);
                         if (chatrooms.isEmpty()) {
                             System.out.println("No chatrooms exist yet.");
                         } else {
@@ -280,7 +318,7 @@ public class Client {
                 } else if (userInputSentToServer.equals("/showallusers")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     try {
-                        ArrayList<User> users = (ArrayList) TCPSocketService.receiveObject(tcpSocket);
+                        List<User> users = (List) TCPSocketService.receiveObject(tcpSocket);
                         if (users.isEmpty()) {
                             System.out.println("No users exist yet.");
                         } else {
@@ -309,7 +347,7 @@ public class Client {
                         }
                     }
                     try {
-                        ArrayList<User> chatroomUsers = (ArrayList) TCPSocketService.receiveObject(tcpSocket);
+                        List<User> chatroomUsers = (List) TCPSocketService.receiveObject(tcpSocket);
                         if (chatroomUsers.isEmpty()) {
                             System.out.println("No users exist in this chatroom.");
                         } else {
@@ -321,8 +359,9 @@ public class Client {
                         e.printStackTrace();
                     }
                 }
-                //this should be changed to TCP or more efficient algorithm needs to be designed
-                //request to delegate chatroom ownership
+                //request to delegate chatroom ownership to a new owner provided the client is the current owner and the new owner exists in the group
+                //the chatroom name is asked first, if it exists then the server proceeds to ask for new owner name, if new owner exists and is part of the chatroom
+                //make him the new owner
                 else if (userInputSentToServer.equals("/delegatechatroomownership")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
@@ -354,6 +393,12 @@ public class Client {
                             break;
                         }
                     }
+                    //in case the client wants to join a new chatroom
+                    //the chatroom name is asked first
+                    //then return the policy, if policy is 0 it means that the chatroom does not exist
+                    //if policy is 1 then the client has joined the chatroom
+                    //if the policy is 2 then ask for password
+                    //if policy is 3 notify client that the permission will be notified with the new request
                 } else if (userInputSentToServer.equals("/joinchatroom")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
@@ -361,6 +406,7 @@ public class Client {
                         userInputSentToServer = userInput.readLine();
                         TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                         String chatroomNameExists = (String) TCPSocketService.receiveObject(tcpSocket);
+                        System.out.println(chatroomNameExists);
                         //0 means chatroom does not exist, 1-3 are the respective policies
                         if (chatroomNameExists.equals("0")) {
                             System.out.println("Chatroom name does not exist, please input the correct name.");
@@ -387,11 +433,16 @@ public class Client {
                                     continue;
                                 }
                             }
+                            //this is done through UDP multicast now
                         } else if (chatroomNameExists.equals("3")) {
                             System.out.println("Permission request has been sent to owner. You will be notified.");
                         }
                         break;
                     }
+                    //in case the owner wants to kick someone from their group
+                    //ask for chatroom name first,
+                    //if it exists, ask for member name then
+                    //if member exists then the server kicks him
                 } else if (userInputSentToServer.equals("/kickfromchatroom")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
@@ -419,11 +470,14 @@ public class Client {
                             continue;
                         }
                     }
+                    //mainly for debugging, allows the client to know the multicast IPs of the chatrooms he is a part of
                 } else if (userInputSentToServer.equals("/multicast")) {
                     chatroomListener.showMulticast();
                 }
-                //this should be changed to TCP or more efficient algorithm needs to be designed
                 //request to create a new chatroom
+                //ask for chatroom name first, if it is not taken then
+                //ask for policy, if policy is 2 (password-protected) ask for password
+                //finally, ask for time limit (in minutes) for a user to send a message before he gets kicked
                 else if (userInputSentToServer.equals("/createchatroom")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
@@ -441,17 +495,22 @@ public class Client {
                             if (userInputSentToServer.equals("2")) {
                                 System.out.println("What will the chatroom's password be?");
                                 userInputSentToServer = userInput.readLine();
-                                //this should be encrypted when sent
+                                //this should be encrypted when sent (unless it already is [?])
                                 TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                             }
                             InetAddress multicastAddress = (InetAddress) TCPSocketService.receiveObject(tcpSocket);
-                            System.out.println(multicastAddress.getHostAddress());
                             chatroomListener.addChatroomMulticastAddress(multicastAddress);
+                            System.out.println("What is the time limit (in minutes) for a user to send a message before he gets kicked?");
+                            userInputSentToServer = userInput.readLine();
+                            int kickTime = Integer.parseInt(userInputSentToServer);
+                            TCPSocketService.sendObject(kickTime, tcpSocket);
                             System.out.println("Your chatroom has been succesfully added on the server.");
                             break;
                         }
                     }
                     //request to delete a chatroom
+                    //provided the chatroom exists and that the owner is the currect admin,
+                    //the server will delete the chatroom when it receives this request
                 } else if (userInputSentToServer.equals("/deletechatroom")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
@@ -472,6 +531,7 @@ public class Client {
                     System.out.println(help);
                     //when the user has entered something the client does not understand
                     //and neither will the server (hopefully)
+                    // a UDP packet is sent to the server (just a show-case of the authors skill of developing both UDP [along with /availability command] and TCP)
                 } else {
                     question = UDPSocketService.convertDistinguishableObjectToByteArray(0, userInputSentToServer);
                     DatagramPacket packetToServer = new DatagramPacket(question, question.length, serverAddr, port);
@@ -491,8 +551,6 @@ public class Client {
         } catch (IOException e) {
             e.printStackTrace();
         } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (InterruptedException e) {
             e.printStackTrace();
         }
         System.out.println("Exiting...");

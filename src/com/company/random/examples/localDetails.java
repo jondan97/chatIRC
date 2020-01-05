@@ -9,7 +9,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 public class localDetails {
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         try {
             /* Create an InetAddress object for the local host. */
             InetAddress thisMachine = InetAddress.getLocalHost();
@@ -23,7 +23,7 @@ public class localDetails {
             return;
         }
     }
-};
+}
 
 /*
  * Execution Example:
