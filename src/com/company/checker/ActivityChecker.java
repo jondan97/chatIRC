@@ -30,7 +30,8 @@ public class ActivityChecker extends Thread {
         this.pendingChatroomMessages = pendingChatroomMessages;
     }
 
-    //this allows the thread to calculate how long ago was a LocalDateTime record from the present in minutes
+    //this allows the thread to calculate the time difference between now and the time value in minutes that it takes as
+    //a parameter
     //takes local date time
     //returns difference in minutes (long type)
     public long calculateMinutesFromNow(LocalDateTime time) {

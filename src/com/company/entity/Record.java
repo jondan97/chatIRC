@@ -14,7 +14,7 @@ public class Record {
 
     //the user who is associated with this record
     private User user;
-    //the time this record was first created, in future references this time might also get updated to the current
+    //the time this record was first created, in future references this time might also get updated to the
     //time of that particular moment (that it is needed)
     private LocalDateTime time;
     //the chatroom that is associated with this record

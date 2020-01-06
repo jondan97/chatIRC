@@ -32,13 +32,13 @@ public class Client {
         int startPort = 1;
         int stopPort = 65535;
         //port for receiving group messages
-        int multicastPort;
+        int multicastPort = 1;
 
         //in case the user wants to change IP/Port without editing the Java files
+        //java -jar application.jar 'ipString' 'port'
         if (args.length > 0) {
             ipString = args[0];
             port = Integer.parseInt(args[1]);
-            multicastPort = Integer.parseInt(args[2]);
         } else {
             for (multicastPort = startPort; multicastPort <= stopPort; multicastPort += 1) {
                 try {
@@ -68,7 +68,7 @@ public class Client {
                 "/delegateChatroomOwnership - Delegate the ownership of a chatroom to another user (Provided you are the owner). \n" +
                 "/permissions - Check for notifications concerning users that want to join one of your prohibited chatrooms. \n" +
                 "/keystrokes - Gives the ability to see live in real-time the keystrokes of the other user (Support for one user only)  \n" +
-                "/refresh - Refreshes the command line for any new messages/notifications \n" +
+                "/refresh or press 'enter'- Refreshes the command line for any new messages/notifications \n" +
                 "/help - Shows all available commands again. \n" +
                 "/exit - Exits the application. \n";
         System.out.println(help);
@@ -140,6 +140,16 @@ public class Client {
                 while (true) {
                     System.out.println("What is your username going to be?");
                     username = userInput.readLine();
+                    //trimming leading and trailing spaces
+                    username = username.trim();
+                    if (username.contains(" ")) {
+                        System.out.println("Your name should not have any spaces.");
+                        continue;
+                    }
+                    if (username.length() > 15) {
+                        System.out.println("Your name should not be longer than 15 characters.");
+                        continue;
+                    }
                     TCPSocketService.sendObject(username, tcpSocket);
                     usernameExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
                     if (usernameExists) {
@@ -200,7 +210,7 @@ public class Client {
                 if (!permissions.isEmpty()) {
                     System.out.println("You have [" + permissions.size() + "] users asking for permission to join a group of yours.");
                 }
-                //waiting for input
+                //waiting for input (type text to send to server:)
                 userInputSentToServer = userInput.readLine();
                 //user input is always lowercase, commands could be written any way
                 //for example: '/showAllChatrooms' or '/showallchatrooms' or '/SHOWALLCHATROOMS'
@@ -267,10 +277,24 @@ public class Client {
                     }
                 }
                 //reserved only for the admin
+                //sets the deletion time before an inactive chatroom is deleted
                 else if (userInputSentToServer.equals("/chatroomdeletiontime")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
-                    System.out.println("What is the new chatroom deletion time?");
-                    userInputSentToServer = userInput.readLine();
+                    while (true) {
+                        System.out.println("What is the new chatroom deletion time?");
+                        userInputSentToServer = userInput.readLine();
+                        //removing white spaces
+                        userInputSentToServer = userInputSentToServer.trim();
+                        if (!isInteger(userInputSentToServer)) {
+                            System.out.println("Please input a valid number.");
+                            continue;
+                        }
+                        if (userInputSentToServer.length() > 9) {
+                            System.out.println("Please input a number below 999999999.");
+                            continue;
+                        }
+                        break;
+                    }
                     int universalChatroomDeletionTime = Integer.parseInt(userInputSentToServer);
                     TCPSocketService.sendObject(universalChatroomDeletionTime, tcpSocket);
                     System.out.println("New time is set. (If you are the admin)");
@@ -316,6 +340,7 @@ public class Client {
                         if (chatrooms.isEmpty()) {
                             System.out.println("No chatrooms exist yet.");
                         } else {
+                            System.out.println("Chatrooms that exist in the application:");
                             for (Chatroom chatroom : chatrooms) {
                                 System.out.println(chatroom);
                             }
@@ -331,6 +356,7 @@ public class Client {
                         if (users.isEmpty()) {
                             System.out.println("No users exist yet.");
                         } else {
+                            System.out.println("Users that exist in the application:");
                             for (User user : users) {
                                 System.out.println(user.getUsername());
                             }
@@ -352,6 +378,7 @@ public class Client {
                             if (chatroomUsers.isEmpty()) {
                                 System.out.println("No users exist in this chatroom.");
                             } else {
+                                System.out.println("Users that exist in this chatroom:");
                                 for (User user : chatroomUsers) {
                                     System.out.println(user.getUsername());
                                 }
@@ -482,15 +509,34 @@ public class Client {
                 else if (userInputSentToServer.equals("/createchatroom")) {
                     TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                     while (true) {
-                        System.out.println("What is going to be the name of the chatroom?");
-                        userInputSentToServer = userInput.readLine();
+                        while (true) {
+                            System.out.println("What is going to be the name of the chatroom?");
+                            userInputSentToServer = userInput.readLine();
+                            //trimming leading and trailing spaces
+                            userInputSentToServer = userInputSentToServer.trim();
+                            if (userInputSentToServer.contains(" ")) {
+                                System.out.println("The chatroom name cannot have any spaces.");
+                                continue;
+                            }
+                            if (userInputSentToServer.length() > 15) {
+                                System.out.println("The chatroom name cannot be longer than 15 characters.");
+                                continue;
+                            }
+                            break;
+                        }
                         TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                         boolean alreadyExists = (boolean) TCPSocketService.receiveObject(tcpSocket);
                         if (alreadyExists) {
                             System.out.println("Chatroom name already exists, please choose another.");
                         } else if (!alreadyExists) {
-                            System.out.println("What is going to be the policy of the chatroom? (1=Free, 2=Password-Protected, 3=Permission-Required)");
-                            userInputSentToServer = userInput.readLine();
+                            while (true) {
+                                System.out.println("What is going to be the policy of the chatroom? (1=Free, 2=Password-Protected, 3=Permission-Required)");
+                                userInputSentToServer = userInput.readLine();
+                                if (userInputSentToServer.equals("1") || userInputSentToServer.equals("2") || userInputSentToServer.equals("3")) {
+                                    break;
+                                }
+                                System.out.println("Please choose a number between 1 and 3.");
+                            }
                             TCPSocketService.sendObject(userInputSentToServer, tcpSocket);
                             if (userInputSentToServer.equals("2")) {
                                 System.out.println("What will the chatroom's password be?");
@@ -500,8 +546,19 @@ public class Client {
                             }
                             InetAddress multicastAddress = (InetAddress) TCPSocketService.receiveObject(tcpSocket);
                             chatroomListener.addChatroomMulticastAddress(multicastAddress);
-                            System.out.println("What is the time limit (in minutes) for a user to send a message before he gets kicked?");
-                            userInputSentToServer = userInput.readLine();
+                            while (true) {
+                                System.out.println("What is the time limit (in minutes) for a user to send a message before he gets kicked?");
+                                userInputSentToServer = userInput.readLine();
+                                if (!isInteger(userInputSentToServer)) {
+                                    System.out.println("Please input a valid number.");
+                                    continue;
+                                }
+                                if (userInputSentToServer.length() > 9) {
+                                    System.out.println("Please input a number below 999999999.");
+                                    continue;
+                                }
+                                break;
+                            }
                             int kickTime = Integer.parseInt(userInputSentToServer);
                             TCPSocketService.sendObject(kickTime, tcpSocket);
                             System.out.println("Your chatroom has been succesfully added on the server.");
@@ -545,6 +602,9 @@ public class Client {
                     //waiting for input - message that is always soon after every loop, unless the user requests a
                     //refresh by typing "/refresh" or ""
                     System.out.println("Type text to send to the server: ");
+                    //adding a delay so messages from the other threads (chatroom and private chats)
+                    //show first before the "type text to send to the server" message from this thread
+                    Thread.sleep(100);
                 }
             }
 
@@ -554,9 +614,31 @@ public class Client {
             System.out.println("Looks like the server is not up. Try again later.");
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("Lost connection to server. Please restart the application.");
+        } catch (InterruptedException e) {
         }
         System.out.println("Exiting...");
 
 
+    }
+
+    //Checks if input is an integer
+    //takes a string as a parameter
+    //returns boolean
+    public static boolean isInteger(String str) {
+        if (str == null) {
+            return false;
+        }
+        int length = str.length();
+        if (length == 0) {
+            return false;
+        }
+        int i = 0;
+        for (; i < length; i++) {
+            char c = str.charAt(i);
+            if (c < '0' || c > '9') {
+                return false;
+            }
+        }
+        return true;
     }
 }

@@ -14,7 +14,7 @@ public class Message implements Serializable {
     //message that is contained along with this class
     //in private chat this is not a full sentence but a single character
     private String message;
-    //who send the message
+    //who sent the message
     private User sender;
     //in the case of private chatting, the server needs to know the key value of the character, for example '13' means
     //'SPACE' on the keyboard
